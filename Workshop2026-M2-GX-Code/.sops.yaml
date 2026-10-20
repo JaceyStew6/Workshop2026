@@ -1,0 +1,6 @@
+# SOPS chiffre secrets/secrets.enc.yaml avec la clé PUBLIQUE age de l'équipe.
+# La clé PRIVÉE (~/.config/sops/age/keys.txt) ne quitte jamais le PC Hôte et n'est JAMAIS versionnée.
+# `tools/init_secrets.sh` remplace le recipient ci-dessous par la clé publique générée.
+creation_rules:
+  - path_regex: secrets/.*\.enc\.yaml$
+    age: REPLACE_WITH_AGE_PUBLIC_KEY

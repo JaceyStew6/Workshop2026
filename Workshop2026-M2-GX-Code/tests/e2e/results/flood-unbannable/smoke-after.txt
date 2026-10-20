@@ -1,0 +1,5 @@
+  [OK] devis public               77 ms frais=0.7
+  [OK] connexion                  71 ms 
+  [OK] paiement                   13 ms 9dcec298-6c9e-47a5-8cfd-277a70b371c6
+  [OK] relecture                   7 ms 
+SMOKE OK

@@ -1,0 +1,50 @@
+---
+# Restauration de la base depuis la dernière sauvegarde (PRA). Usage :
+#   ansible-playbook ansible/restore.yml                       # dernière sauvegarde
+#   ansible-playbook ansible/restore.yml -e backup=backups/payments-20261022-101500.dump
+- name: Restaurer la base de paiement
+  hosts: local
+  gather_facts: false
+  vars:
+    project_dir: "{{ playbook_dir }}/.."
+    host_ip: "{{ lookup('env', 'HOST_IP') | default('192.168.137.1', true) }}"
+  tasks:
+    - name: Choisir la sauvegarde
+      ansible.builtin.shell:
+        cmd: "{{ 'echo ' + backup if backup is defined else 'ls -1t backups/payments-*.dump | head -1' }}"
+        chdir: "{{ project_dir }}"
+        executable: /bin/sh
+      register: chosen
+      changed_when: false
+    - name: Refuser s'il n'y a aucune sauvegarde
+      ansible.builtin.fail: { msg: "Aucune sauvegarde disponible dans backups/" }
+      when: chosen.stdout | trim == ''
+    - name: Couper le trafic entrant et les services qui écrivent
+      ansible.builtin.command:
+        cmd: docker compose stop waf payment-api auth-service
+        chdir: "{{ project_dir }}"
+      changed_when: true
+    - name: Restaurer (pg_restore --clean)
+      ansible.builtin.shell:
+        cmd: >-
+          docker compose exec -T postgres pg_restore -U postgres_admin -d payments
+          --clean --if-exists --no-owner < {{ chosen.stdout | trim }}
+        chdir: "{{ project_dir }}"
+        executable: /bin/sh
+      changed_when: true
+    - name: Réappliquer les droits des rôles de service
+      ansible.builtin.command:
+        cmd: docker compose exec -T postgres sh /docker-entrypoint-initdb.d/20-roles.sh
+        chdir: "{{ project_dir }}"
+      failed_when: false          # les rôles existent déjà : seul l'effet des GRANT nous intéresse
+      changed_when: true
+    - name: Redémarrer les services
+      ansible.builtin.command:
+        cmd: docker compose up -d --wait --wait-timeout 180
+        chdir: "{{ project_dir }}"
+      changed_when: true
+    - name: Vérifier le service après restauration
+      ansible.builtin.command:
+        cmd: python3 tools/smoke.py --base http://{{ host_ip }}
+        chdir: "{{ project_dir }}"
+      changed_when: false

@@ -1,0 +1,334 @@
+# PROJECT RESILIENCE-ALPHA : plateforme de paiement FICTIVE + chaîne de cyber-résilience.
+#
+# Réseaux
+#   edge : seul réseau publié vers le réseau du hotspot (WAF uniquement)
+#   app  : services métier + base (internal : aucune sortie Internet)
+#   ops  : observabilité, détection, remédiation (internal)
+#   mgmt : interfaces réservées au PC Hôte (ports liés à 127.0.0.1). Docker ne publie pas de ports
+#          sur un réseau `internal`, d'où ce réseau dédié, non joignable depuis le PC Attaquant.
+#
+# Variables (.env versionné, sans secret) : HOST_IP (IP du hotspot, ex. 192.168.137.1)
+# Secrets : ./.secrets/* (rendus depuis secrets/secrets.enc.yaml par SOPS+age, dossier ignoré par Git)
+
+name: resilience-alpha
+
+x-hardened: &hardened
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+networks:
+  # Sous-réseau fixe : en mode labo un seul poste, TRUSTED_PROXIES (.env) doit viser la passerelle
+  # de ce réseau (c'est l'IP que le WAF voit pour tout le trafic venant de l'hôte sous Docker Desktop).
+  edge: { driver: bridge, ipam: { config: [{ subnet: 172.30.10.0/24, gateway: 172.30.10.1 }] } }
+  app:  { driver: bridge, internal: true }
+  ops:  { driver: bridge, internal: true }
+  mgmt: { driver: bridge }
+
+volumes:
+  pgdata:
+  prom-data:
+  loki-data:
+  grafana-data:
+  waf-bans:
+  rag-index:
+
+secrets:
+  db_password:        { file: ./.secrets/db_password }
+  jwt_secret:         { file: ./.secrets/jwt_secret }
+  remediation_token:  { file: ./.secrets/remediation_token }
+  waf_admin_token:    { file: ./.secrets/waf_admin_token }
+  probe_password:     { file: ./.secrets/probe_password }
+  demo_password:      { file: ./.secrets/demo_password }
+  grafana_password:   { file: ./.secrets/grafana_password }
+
+services:
+  # ---------------------------------------------------------------- EDGE
+  waf:
+    <<: *hardened
+    build: ./services/waf
+    ports:
+      - "${HOST_IP:-0.0.0.0}:80:8080"        # seul point d'entrée du trafic (utilisateurs + attaquant)
+    networks: [edge, app, ops]               # ops : écouteurs 8081 (sonde) et 8082 (admin + /metrics)
+    secrets: [waf_admin_token]
+    environment:
+      AUTH_URL: http://auth-service:8000
+      PAYMENT_URL: http://payment-api:8000
+      FRONTEND_URL: http://frontend:8080
+      WAF_ADMIN_TOKEN_FILE: /run/secrets/waf_admin_token
+      BAN_FILE: /var/lib/waf/bans.json
+      NEVER_BAN: ${HOST_IP:-192.168.137.1}   # anti-lockout du PC Hôte
+      # Docker Desktop (WSL2) peut masquer l'IP source : voir README, section « IP source ». À vérifier lundi.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+    volumes:
+      - waf-bans:/var/lib/waf
+    read_only: true
+    tmpfs: [/tmp]
+    depends_on:
+      payment-api: { condition: service_healthy }
+      auth-service: { condition: service_healthy }
+      frontend: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8081/healthz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    mem_limit: 256m
+
+  # ----------------------------------------------------------------- APP
+  frontend:
+    <<: *hardened
+    build: ./services/frontend       # portail de paiement (HTML/JS) servi par nginx non privilégié
+    networks: [app]
+    read_only: true
+    tmpfs: [/tmp]
+    mem_limit: 64m
+
+  auth-service:
+    <<: *hardened
+    build: ./services/auth-service
+    networks: [app]
+    secrets: [db_password, jwt_secret, demo_password, probe_password]
+    environment:
+      DB_HOST: postgres
+      DB_NAME: payments
+      DB_USER: auth_svc
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
+      DEMO_PASSWORD_FILE: /run/secrets/demo_password
+      PROBE_PASSWORD_FILE: /run/secrets/probe_password
+    read_only: true
+    tmpfs: [/tmp]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    mem_limit: 256m
+
+  payment-api:
+    <<: *hardened
+    build: ./services/payment-api
+    networks: [app]
+    secrets: [db_password, jwt_secret]
+    environment:
+      DB_HOST: postgres
+      DB_NAME: payments
+      DB_USER: payment_svc
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
+      RISK_COST_ITER: "30000"
+      DB_POOL_MAX: "3"                 # pool volontairement étroit : sature vite sous charge -> 503 net, pas une lente file d'attente.
+                                        # 2 était trop juste : la sonde interne de vérification + un peu de bruit normal
+                                        # suffisaient parfois à eux seuls à faire patienter une requête -- vérifié en pratique.
+      DB_POOL_TIMEOUT: "0.4"           # sous 0,5 coeur, une requête tient déjà ~1s : un délai d'attente plus court que ça échoue net (503)
+    read_only: true
+    tmpfs: [/tmp]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    cpus: "0.5"                      # capacité volontairement bornée : la saturation devient démontrable
+    mem_limit: 384m
+    labels:
+      resilience.remediable: "true"  # seul ce label rend un conteneur redémarrable par le moteur
+
+  postgres:
+    <<: *hardened
+    image: postgres:16-alpine
+    networks: [app]
+    secrets: [db_password]
+    environment:
+      POSTGRES_DB: payments
+      POSTGRES_USER: postgres_admin
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      DB_PASSWORD_FILE: /run/secrets/db_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./services/postgres/init:/docker-entrypoint-initdb.d:ro
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]   # cap_drop ALL casse l'entrypoint PostgreSQL
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres_admin -d payments"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    mem_limit: 512m
+
+  # ----------------------------------------------------------------- OPS
+  prometheus:
+    <<: *hardened
+    image: prom/prometheus:v2.55.1
+    networks: [ops, app, mgmt]       # app : scrape des /metrics des services métier ; mgmt : port publié (réseaux internes = pas de publication)
+    ports:
+      - "127.0.0.1:9090:9090"        # PC Hôte uniquement : collect.py (entraînement du modèle) et diagnostic
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/rules:/etc/prometheus/rules:ro
+      - prom-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=24h
+    mem_limit: 512m
+
+  cadvisor:
+    restart: unless-stopped
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    networks: [ops]
+    # cAdvisor lit l'hôte (cgroups) : accès large en lecture, assumé et listé dans l'analyse de risques (EBIOS, R5).
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    command: ["--housekeeping_interval=5s", "--docker_only=true", "--store_container_labels=false"]
+    mem_limit: 256m
+
+  loki:
+    <<: *hardened
+    image: grafana/loki:3.2.1
+    networks: [ops]
+    volumes:
+      - ./infra/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    mem_limit: 512m
+
+  promtail:
+    <<: *hardened
+    image: grafana/promtail:3.2.1
+    networks: [ops]
+    volumes:
+      - ./infra/promtail/promtail.yml:/etc/promtail/config.yml:ro
+    command: ["-config.file=/etc/promtail/config.yml"]
+    depends_on: [loki, docker-ro]
+    mem_limit: 128m
+
+  grafana:
+    <<: *hardened
+    image: grafana/grafana:11.3.0
+    networks: [ops, mgmt]
+    ports:
+      - "127.0.0.1:3000:3000"        # visible depuis le PC Hôte uniquement
+    secrets: [grafana_password]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_password
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./infra/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./infra/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./infra/grafana/dashboards:/etc/grafana/provisioning/dashboards-json:ro
+    mem_limit: 256m
+
+  ml-detector:
+    <<: *hardened
+    build: ./services/ml-detector
+    networks: [ops]
+    secrets: [remediation_token]
+    environment:
+      PROMETHEUS_URL: http://prometheus:9090
+      REMEDIATION_URL: http://remediation-engine:8000
+      REMEDIATION_TOKEN_FILE: /run/secrets/remediation_token
+      MODEL_PATH: /models/iforest.joblib
+      ANOMALY_THRESHOLD: "0.70"
+    volumes:
+      - ./models:/models:ro          # iforest.joblib entraîné sur le trafic RÉEL de la plateforme
+    read_only: true
+    tmpfs: [/tmp]
+    depends_on: [prometheus]
+    mem_limit: 256m
+
+  remediation-engine:
+    <<: *hardened
+    build: ./services/remediation-engine
+    networks: [ops]
+    secrets: [remediation_token, waf_admin_token, probe_password]
+    environment:
+      DOCKER_HOST: tcp://docker-restart:2375     # JAMAIS le docker.sock brut
+      WAF_ADMIN_URL: http://waf:8082
+      PROBE_BASE_URL: http://waf:8081            # login/paiement/grand livre : listener interne, jamais banni
+      PROBE_PUBLIC_URL: http://waf:8080          # état perçu + stabilité : chemin public, comme un vrai client
+      SERVICE_TOKEN_FILE: /run/secrets/remediation_token
+      WAF_ADMIN_TOKEN_FILE: /run/secrets/waf_admin_token
+      PROBE_PASSWORD_FILE: /run/secrets/probe_password
+      ALLOWED_TARGETS: payment-api=resilience-alpha-payment-api-1
+      MAX_RESTARTS_PER_WINDOW: "3"
+      RESTART_WINDOW_SECONDS: "300"
+      BAN_TTL_SECONDS: "600"
+      NEVER_BAN: ${HOST_IP:-192.168.137.1}
+      AUDIT_LOG: /tmp/audit.jsonl
+    read_only: true
+    tmpfs: [/tmp]
+    depends_on: [docker-restart, waf]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    mem_limit: 256m
+
+  docker-restart:
+    <<: *hardened
+    image: tecnativa/docker-socket-proxy:0.2.0
+    networks: [ops]
+    environment:
+      CONTAINERS: "1"       # inspect / list
+      POST: "1"
+      ALLOW_RESTARTS: "1"   # NB : ce flag autorise aussi start/stop/kill ; le moteur n'utilise que restart
+                            # et vérifie le label resilience.remediable=true (voir governance/ebios-rm.md, R4)
+      EXEC: "0"
+      IMAGES: "0"
+      NETWORKS: "0"
+      VOLUMES: "0"
+      SERVICES: "0"
+      SWARM: "0"
+      SECRETS: "0"
+      INFO: "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    # Si Docker Desktop (WSL2) refuse l'accès au socket avec cap_drop ALL : ajouter `user: root` ICI uniquement.
+
+  docker-ro:
+    <<: *hardened
+    image: tecnativa/docker-socket-proxy:0.2.0
+    networks: [ops]
+    environment: { CONTAINERS: "1", POST: "0", EXEC: "0", IMAGES: "0", NETWORKS: "0", VOLUMES: "0" }
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  dashboard:
+    <<: *hardened
+    build: ./services/dashboard      # React + Tailwind : timeline d'incident, état avant/pendant/après
+    networks: [ops, mgmt]
+    ports:
+      - "127.0.0.1:8088:8080"        # PC Hôte uniquement
+    read_only: true
+    tmpfs: [/tmp]
+    depends_on: [remediation-engine]
+    mem_limit: 64m
+
+  rag-assistant:
+    <<: *hardened
+    build: ./services/rag-assistant  # LangChain + index vectoriel en mémoire ; documents en lecture seule
+    networks: [mgmt]                 # volontairement absent du réseau ops : aucun chemin vers le moteur
+    ports:
+      - "127.0.0.1:8090:8000"
+    environment:
+      # Ollama tourne nativement sur Windows (accès GPU) ; le conteneur le joint via host.docker.internal.
+      OLLAMA_URL: http://host.docker.internal:11434
+      OLLAMA_MODEL: qwen2.5:7b-instruct
+      OLLAMA_EMBED_MODEL: nomic-embed-text
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./docs:/data/docs:ro
+      - rag-index:/data/index
+    mem_limit: 512m

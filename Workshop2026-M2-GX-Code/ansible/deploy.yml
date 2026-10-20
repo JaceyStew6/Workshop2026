@@ -1,0 +1,57 @@
+---
+# Déploiement reproductible sur le PC Hôte (WSL2) : ansible-playbook ansible/deploy.yml
+# Rôle d'Ansible ici : orchestrer et VÉRIFIER (pré-requis, secrets, build, démarrage, smoke test).
+# Rôle de Docker Compose : décrire et exécuter les conteneurs. Les deux ne se substituent pas.
+- name: Déployer PROJECT RESILIENCE-ALPHA
+  hosts: local
+  gather_facts: false
+  vars:
+    project_dir: "{{ playbook_dir }}/.."
+    host_ip: "{{ lookup('env', 'HOST_IP') | default('192.168.137.1', true) }}"
+  tasks:
+    - name: Docker Compose disponible
+      ansible.builtin.command: docker compose version
+      changed_when: false
+
+    - name: Fichier .env présent (copie de l'exemple sinon)
+      ansible.builtin.copy:
+        src: "{{ project_dir }}/.env.example"
+        dest: "{{ project_dir }}/.env"
+        mode: "0644"
+        force: false
+
+    - name: Secrets déchiffrés (SOPS + age)
+      ansible.builtin.command:
+        cmd: sh tools/render_secrets.sh
+        chdir: "{{ project_dir }}"
+        creates: "{{ project_dir }}/.secrets/db_password"
+
+    - name: Le modèle ML entraîné sur le trafic réel existe
+      ansible.builtin.stat:
+        path: "{{ project_dir }}/models/iforest.joblib"
+      register: model
+    - name: Échec explicite si le modèle manque (sauf premier démarrage « -e bootstrap=true »)
+      ansible.builtin.fail:
+        msg: >-
+          models/iforest.joblib absent. Premier démarrage : relancez avec -e bootstrap=true (tout démarre SAUF le détecteur),
+          générez du trafic, entraînez le modèle (README.md, section « Entraîner le détecteur »), puis relancez sans bootstrap.
+          Un modèle simulé ne doit pas partir en démo.
+      when: not model.stat.exists and not (bootstrap | default(false) | bool)
+
+    - name: Construction des images
+      ansible.builtin.command:
+        cmd: docker compose build
+        chdir: "{{ project_dir }}"
+      changed_when: true
+
+    - name: Démarrage et attente de la santé de tous les services
+      ansible.builtin.command:
+        cmd: "docker compose up -d --wait --wait-timeout 240{{ ' --scale ml-detector=0' if not model.stat.exists else '' }}"
+        chdir: "{{ project_dir }}"
+      changed_when: true
+
+    - name: Smoke test métier (connexion, devis, paiement, relecture)
+      ansible.builtin.command:
+        cmd: python3 tools/smoke.py --base http://{{ host_ip }}
+        chdir: "{{ project_dir }}"
+      changed_when: false

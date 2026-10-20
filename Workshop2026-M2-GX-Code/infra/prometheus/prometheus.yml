@@ -1,0 +1,26 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: payment-api
+    static_configs: [{ targets: ["payment-api:8000"], labels: { service: payment-api } }]
+  - job_name: auth-service
+    static_configs: [{ targets: ["auth-service:8000"], labels: { service: auth-service } }]
+  - job_name: waf
+    static_configs: [{ targets: ["waf:8082"], labels: { service: waf } }]
+  - job_name: ml-detector
+    static_configs: [{ targets: ["ml-detector:9101"], labels: { service: ml-detector } }]
+  - job_name: remediation-engine
+    static_configs: [{ targets: ["remediation-engine:8000"], labels: { service: remediation-engine } }]
+  - job_name: cadvisor
+    static_configs: [{ targets: ["cadvisor:8080"] }]
+    metric_relabel_configs:
+      # cAdvisor nomme les conteneurs "resilience-alpha-payment-api-1" ; le contrat de features.py attend "payment-api"
+      - source_labels: [name]
+        regex: 'resilience-alpha-(.+)-\d+'
+        target_label: name
+        replacement: '$1'

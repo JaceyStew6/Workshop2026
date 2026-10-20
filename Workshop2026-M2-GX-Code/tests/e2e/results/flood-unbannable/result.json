@@ -1,0 +1,107 @@
+{
+  "attack_started_at": 1792406823.9218795,
+  "attack_rps": 300,
+  "attacker_ip": "192.168.137.1",
+  "incident": {
+    "incident_id": "inc-20261019-104728",
+    "state": "ESCALATED",
+    "suspected_class": "availability",
+    "anomaly_score": 0.704,
+    "duration_s": 49.44,
+    "target_service": "payment-api"
+  },
+  "detection_delay_s": 24.1,
+  "mttr_from_detection_s": 49.44,
+  "total_from_attack_to_recovered_s": 73.5,
+  "latency_ms_median_before": 111,
+  "latency_ms_max_during": 2263,
+  "samples_not_up_during": 31,
+  "latency_ms_median_after": 117,
+  "steps": [
+    {
+      "t": 25.8,
+      "action": "ASSESS",
+      "ip": null,
+      "ok": false,
+      "detail": "service toujours dégradé : redémarrage nécessaire"
+    },
+    {
+      "t": 28.9,
+      "action": "RESTART_SERVICE",
+      "ip": null,
+      "ok": true,
+      "detail": "processus payment relancé"
+    }
+  ],
+  "transitions": [
+    {
+      "t": 24.1,
+      "state": "DETECTED",
+      "why": "alerte reçue de ml-detector (score 0.704)"
+    },
+    {
+      "t": 24.1,
+      "state": "DECIDING",
+      "why": "classe=availability"
+    },
+    {
+      "t": 24.1,
+      "state": "REMEDIATING",
+      "why": "exécution du plan"
+    },
+    {
+      "t": 29.2,
+      "state": "VERIFYING",
+      "why": "vérification par transaction réelle + cohérence du grand livre"
+    },
+    {
+      "t": 73.5,
+      "state": "ESCALATED",
+      "why": "la vérification n'a pas abouti dans le délai : escalade humaine"
+    }
+  ],
+  "verification": {
+    "ts": 1792406897.463343,
+    "ok": false,
+    "steps": [
+      {
+        "step": "quote",
+        "ok": true,
+        "ms": 1623,
+        "detail": "HTTP 200"
+      },
+      {
+        "step": "login",
+        "ok": true,
+        "ms": 107,
+        "detail": "HTTP 200"
+      },
+      {
+        "step": "payment",
+        "ok": true,
+        "ms": 2386,
+        "detail": "HTTP 201"
+      },
+      {
+        "step": "readback",
+        "ok": true,
+        "ms": 2443,
+        "detail": "HTTP 200"
+      },
+      {
+        "step": "ledger",
+        "ok": true,
+        "ms": 2458,
+        "detail": "somme des soldes = total attendu"
+      },
+      {
+        "step": "public_path",
+        "ok": false,
+        "ms": 1728,
+        "detail": "0/8 devis publics rapides sur 8 s"
+      }
+    ]
+  },
+  "transaction_during_attack_ok": true,
+  "post_incident_transaction_ok": true
+}

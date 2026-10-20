@@ -1,0 +1,18 @@
+cible validée : 192.168.137.1
+[12:53:27] ATTAQUE démarrée : 300 req/s pendant 75s vers http://192.168.137.1:18080 depuis 192.168.137.20
+[12:53:32] envoyées=240 codes={200: 240} erreurs={}
+[12:53:37] envoyées=478 codes={200: 478} erreurs={}
+[12:53:42] envoyées=749 codes={200: 749} erreurs={}
+[12:53:47] envoyées=1000 codes={200: 1000} erreurs={}
+[12:53:52] envoyées=1289 codes={200: 1289} erreurs={}
+[12:53:57] envoyées=1642 codes={200: 1427, 403: 215} erreurs={}
+[12:54:02] envoyées=2635 codes={200: 1427, 403: 1208} erreurs={}
+[12:54:07] envoyées=3907 codes={200: 1427, 403: 2480} erreurs={}
+[12:54:12] envoyées=4830 codes={200: 1427, 403: 3403} erreurs={}
+[12:54:17] envoyées=6153 codes={200: 1427, 403: 4726} erreurs={}
+[12:54:22] envoyées=7664 codes={200: 1427, 403: 6237} erreurs={}
+[12:54:27] envoyées=9125 codes={200: 1427, 403: 7698} erreurs={}
+[12:54:32] envoyées=10619 codes={200: 1427, 403: 9192} erreurs={}
+[12:54:37] envoyées=12106 codes={200: 1427, 403: 10679} erreurs={}
+[12:54:42] envoyées=13530 codes={200: 1427, 403: 12103} erreurs={}
+[12:54:42] fin. envoyées=13530 codes={200: 1427, 403: 12103} erreurs={}

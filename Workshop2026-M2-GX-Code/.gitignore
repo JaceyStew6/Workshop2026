@@ -1,0 +1,12 @@
+.secrets/
+.env
+.venv/
+*.pyc
+__pycache__/
+node_modules/
+services/dashboard/dist/
+backups/
+models/iforest.joblib
+.pytest_cache/
+*.key
+keys.txt

@@ -1,0 +1,25 @@
+---
+# Sauvegarde logique de PostgreSQL (PRA : RPO = fréquence de ce playbook). ansible-playbook ansible/backup.yml
+- name: Sauvegarder la base de paiement
+  hosts: local
+  gather_facts: false
+  vars:
+    project_dir: "{{ playbook_dir }}/.."
+    keep: 10
+  tasks:
+    - name: Dossier de sauvegardes
+      ansible.builtin.file: { path: "{{ project_dir }}/backups", state: directory, mode: "0700" }
+    - name: pg_dump (format custom, compressé)
+      ansible.builtin.shell:
+        cmd: >-
+          docker compose exec -T postgres pg_dump -U postgres_admin -Fc payments
+          > backups/payments-$(date +%Y%m%d-%H%M%S).dump
+        chdir: "{{ project_dir }}"
+        executable: /bin/sh
+      changed_when: true
+    - name: Conserver les dernières sauvegardes uniquement
+      ansible.builtin.shell:
+        cmd: ls -1t backups/payments-*.dump | tail -n +{{ keep + 1 }} | xargs -r rm --
+        chdir: "{{ project_dir }}"
+        executable: /bin/sh
+      changed_when: false

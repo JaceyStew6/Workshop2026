@@ -1,0 +1,21 @@
+cible validée : 192.168.137.1
+[12:47:04] ATTAQUE démarrée : 300 req/s pendant 90s vers http://192.168.137.1:18080 depuis 192.168.137.1
+[12:47:09] envoyées=254 codes={200: 254} erreurs={}
+[12:47:14] envoyées=501 codes={200: 501} erreurs={}
+[12:47:19] envoyées=746 codes={200: 746} erreurs={}
+[12:47:24] envoyées=1012 codes={200: 1012} erreurs={}
+[12:47:29] envoyées=1257 codes={200: 1257} erreurs={}
+[12:47:34] envoyées=1509 codes={200: 1411, 502: 98} erreurs={}
+[12:47:39] envoyées=1751 codes={200: 1653, 502: 98} erreurs={}
+[12:47:44] envoyées=2007 codes={200: 1909, 502: 98} erreurs={}
+[12:47:49] envoyées=2274 codes={200: 2176, 502: 98} erreurs={}
+[12:47:54] envoyées=2535 codes={200: 2437, 502: 98} erreurs={}
+[12:47:59] envoyées=2758 codes={200: 2660, 502: 98} erreurs={}
+[12:48:04] envoyées=2990 codes={200: 2892, 502: 98} erreurs={}
+[12:48:09] envoyées=3243 codes={200: 3145, 502: 98} erreurs={}
+[12:48:14] envoyées=3486 codes={200: 3388, 502: 98} erreurs={}
+[12:48:19] envoyées=3707 codes={200: 3609, 502: 98} erreurs={}
+[12:48:24] envoyées=3955 codes={200: 3857, 502: 98} erreurs={}
+[12:48:29] envoyées=4231 codes={200: 4133, 502: 98} erreurs={}
+[12:48:34] envoyées=4494 codes={200: 4396, 502: 98} erreurs={}
+[12:48:35] fin. envoyées=4560 codes={200: 4462, 502: 98} erreurs={}

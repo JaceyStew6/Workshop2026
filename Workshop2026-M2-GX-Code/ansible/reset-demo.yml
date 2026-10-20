@@ -1,0 +1,32 @@
+---
+# Remise à l'état initial entre deux démonstrations (cible < 60 s) : ansible-playbook ansible/reset-demo.yml
+# Efface les bans, l'historique d'incident et l'état du détecteur ; ne touche pas aux données de la base.
+- name: Réinitialiser la démonstration
+  hosts: local
+  gather_facts: false
+  vars:
+    project_dir: "{{ playbook_dir }}/.."
+    host_ip: "{{ lookup('env', 'HOST_IP') | default('192.168.137.1', true) }}"
+  tasks:
+    - name: Supprimer la liste de bans persistée
+      ansible.builtin.command:
+        cmd: >-
+          docker compose run --rm --no-deps --entrypoint python waf
+          -c "import os; os.path.exists('/var/lib/waf/bans.json') and os.remove('/var/lib/waf/bans.json')"
+        chdir: "{{ project_dir }}"
+      changed_when: true
+    - name: Redémarrer WAF, API, moteur et détecteur
+      ansible.builtin.command:
+        cmd: docker compose restart waf payment-api remediation-engine ml-detector
+        chdir: "{{ project_dir }}"
+      changed_when: true
+    - name: Attendre que tout soit sain
+      ansible.builtin.command:
+        cmd: docker compose up -d --wait --wait-timeout 120
+        chdir: "{{ project_dir }}"
+      changed_when: false
+    - name: Smoke test
+      ansible.builtin.command:
+        cmd: python3 tools/smoke.py --base http://{{ host_ip }}
+        chdir: "{{ project_dir }}"
+      changed_when: false

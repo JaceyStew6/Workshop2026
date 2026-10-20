@@ -1,0 +1,34 @@
+# Fonction SOC/SIEM : corrélation métriques + journaux. Chaque alerte pointe vers un runbook de docs/.
+groups:
+  - name: siem
+    rules:
+      - alert: AuthBruteForce
+        expr: sum(rate(auth_login_total{result=~"failure|locked"}[30s])) > 0.5
+        for: 10s
+        labels: { severity: high, mitre: "T1110" }
+        annotations: { summary: "Rafale d'échecs d'authentification", runbook: "docs/runbooks.md#brute-force" }
+      - alert: WafSignatureBlocks
+        expr: increase(waf_blocked_total{reason="signature"}[1m]) > 3
+        for: 0s
+        labels: { severity: high, mitre: "T1190" }
+        annotations: { summary: "Plusieurs requêtes bloquées par signature (injection probable)", runbook: "docs/runbooks.md#injection" }
+      - alert: SourceBanned
+        expr: waf_bans_active > 0
+        for: 0s
+        labels: { severity: medium }
+        annotations: { summary: "Une source est bannie au WAF (remédiation automatique)", runbook: "docs/runbooks.md#ban" }
+      - alert: ServiceDegraded
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{service="payment-api"}[30s]))) > 0.5
+        for: 10s
+        labels: { severity: high, mitre: "T1499" }
+        annotations: { summary: "Latence p95 de payment-api > 500 ms", runbook: "docs/runbooks.md#saturation" }
+      - alert: RemediationEscalated
+        expr: increase(remediation_incidents_total{state="ESCALATED"}[5m]) > 0
+        for: 0s
+        labels: { severity: critical }
+        annotations: { summary: "Reprise automatique impossible : intervention humaine requise", runbook: "docs/runbooks.md#escalade" }
+      - alert: ComponentDown
+        expr: up == 0
+        for: 15s
+        labels: { severity: critical }
+        annotations: { summary: "Composant injoignable par Prometheus" }

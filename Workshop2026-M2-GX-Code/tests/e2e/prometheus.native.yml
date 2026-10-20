@@ -1,0 +1,13 @@
+# Équivalent natif de infra/prometheus/prometheus.yml (mêmes jobs, mêmes labels, cibles locales)
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+rule_files:
+  - /mnt/user-data/outputs/resilience-alpha/infra/prometheus/rules/*.yml
+scrape_configs:
+  - { job_name: payment-api,        static_configs: [{ targets: ["127.0.0.1:18002"], labels: { service: payment-api } }] }
+  - { job_name: auth-service,       static_configs: [{ targets: ["127.0.0.1:18001"], labels: { service: auth-service } }] }
+  - { job_name: waf,                static_configs: [{ targets: ["127.0.0.1:18082"], labels: { service: waf } }] }
+  - { job_name: ml-detector,        static_configs: [{ targets: ["127.0.0.1:9101"],  labels: { service: ml-detector } }] }
+  - { job_name: remediation-engine, static_configs: [{ targets: ["127.0.0.1:18000"], labels: { service: remediation-engine } }] }
+  - { job_name: cadvisor,           static_configs: [{ targets: ["127.0.0.1:18110"] }] }

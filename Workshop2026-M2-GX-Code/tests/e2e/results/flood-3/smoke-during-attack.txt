@@ -1,0 +1,5 @@
+  [OK] devis public               62 ms frais=0.7
+  [OK] connexion                  64 ms 
+  [OK] paiement                   17 ms 847ed479-43d3-4304-becb-2e2cce3ab1a5
+  [OK] relecture                   7 ms 
+SMOKE OK

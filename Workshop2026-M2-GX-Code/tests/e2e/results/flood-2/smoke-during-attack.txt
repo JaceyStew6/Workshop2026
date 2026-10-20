@@ -1,0 +1,5 @@
+  [OK] devis public              112 ms frais=0.7
+  [OK] connexion                 119 ms 
+  [OK] paiement                   40 ms bbfa4836-3b6d-4808-bea2-862661018282
+  [OK] relecture                  27 ms 
+SMOKE OK

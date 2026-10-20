@@ -1,0 +1,100 @@
+{
+  "attack_started_at": 1792407026.8311543,
+  "attack_rps": 300,
+  "attacker_ip": "192.168.137.20",
+  "incident": {
+    "incident_id": "inc-20261019-105053",
+    "state": "RECOVERED",
+    "suspected_class": "availability",
+    "anomaly_score": 0.704,
+    "duration_s": 13.55,
+    "target_service": "payment-api"
+  },
+  "detection_delay_s": 26.2,
+  "mttr_from_detection_s": 13.55,
+  "total_from_attack_to_recovered_s": 39.7,
+  "latency_ms_median_before": 117,
+  "latency_ms_max_during": 2418,
+  "samples_not_up_during": 10,
+  "latency_ms_median_after": 144.5,
+  "steps": [
+    {
+      "t": 26.9,
+      "action": "BAN_IP",
+      "ip": "192.168.137.20",
+      "ok": true,
+      "detail": "WAF HTTP 201: {\"ip\":\"192.168.137.20\",\"ttl_seconds\":300}"
+    }
+  ],
+  "transitions": [
+    {
+      "t": 26.2,
+      "state": "DETECTED",
+      "why": "alerte reçue de ml-detector (score 0.704)"
+    },
+    {
+      "t": 26.2,
+      "state": "DECIDING",
+      "why": "classe=availability"
+    },
+    {
+      "t": 26.2,
+      "state": "REMEDIATING",
+      "why": "exécution du plan"
+    },
+    {
+      "t": 30.1,
+      "state": "VERIFYING",
+      "why": "vérification par transaction réelle + cohérence du grand livre"
+    },
+    {
+      "t": 39.7,
+      "state": "RECOVERED",
+      "why": "transaction de contrôle réussie, grand livre cohérent"
+    }
+  ],
+  "verification": {
+    "ts": 1792407066.5771554,
+    "ok": true,
+    "steps": [
+      {
+        "step": "quote",
+        "ok": true,
+        "ms": 57,
+        "detail": "HTTP 200"
+      },
+      {
+        "step": "login",
+        "ok": true,
+        "ms": 99,
+        "detail": "HTTP 200"
+      },
+      {
+        "step": "payment",
+        "ok": true,
+        "ms": 23,
+        "detail": "HTTP 201"
+      },
+      {
+        "step": "readback",
+        "ok": true,
+        "ms": 12,
+        "detail": "HTTP 200"
+      },
+      {
+        "step": "ledger",
+        "ok": true,
+        "ms": 18,
+        "detail": "somme des soldes = total attendu"
+      },
+      {
+        "step": "public_path",
+        "ok": true,
+        "ms": 9226,
+        "detail": "8/8 devis publics rapides sur 8 s"
+      }
+    ]
+  },
+  "transaction_during_attack_ok": true,
+  "post_incident_transaction_ok": true
+}
