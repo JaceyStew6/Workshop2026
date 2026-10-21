@@ -26,19 +26,22 @@ un second PC, l'IP source réelle vue par le WAF dans ce cas, et l'assistant RAG
 | Loki / Promtail : centralisation des journaux (WAF, moteur, services) | **Vérifié** après correction (le proxy `docker-ro` bloquait `GET /networks`, dont Promtail a besoin : Loki ne recevait rien) |
 | SOPS + age : génération et chiffrement des secrets, déchiffrement dans `.secrets/` | **Vérifié** sous WSL Ubuntu 24.04 (voir « Déploiement officiel sous WSL ») |
 | Ansible : `deploy.yml`, `backup.yml`, `reset-demo.yml`, `restore.yml` | **Vérifiés** de bout en bout (déploiement 7/7 tâches OK, remise à zéro en 12 s, restauration en 19 s) |
-| Tests unitaires (voir « Tests » pour le détail) | **Exécutés** : waf 37/37, remediation-engine 19/19, ml-detector 8/8, rag-assistant 10/10, dashboard 6/6 + build |
+| Tests unitaires (voir « Tests » pour le détail) | **Exécutés** : waf 37/37, remediation-engine 19/19, ml-detector 8/8, rag-assistant 10/10, dashboard 6/6 + build, **face-gate 28/28, auth-service 15/15, agent hôte 12/12** |
+| **Consigne additionnelle 1** : back-office en 3 étapes (identifiant, visage, mot de passe), habilitations, voyant ESP8266 (`docs/biometric-auth.md`) | **Vérifié de bout en bout à travers le WAF avec une caméra SIMULÉE** (`tests/e2e/face_flow.py`, vrais délais 30 s / 10 s / 5 min), interface testée dans un navigateur, firmware **compilé** (PlatformIO, NodeMCU v2) et logique du voyant testée sur PC. **Non vérifié : vraie caméra USB et vrais visages (qualité de reconnaissance, seuil), ESP8266 physique (jamais flashé), détection de vivacité (absente)** |
 | Assistant RAG : tests unitaires OK, mais appel réel à Ollama (modèle, embeddings) | **Non vérifié** sur ce poste (pas d'Ollama installé) |
 | Scanner de secrets (`tools/check_no_plaintext_secrets.sh`) | **Exécuté** : il confirme que `secrets.enc.yaml` est chiffré ; il signale `.secrets/` présent, ce qui est attendu en local (à rejouer sur l'archive finale) |
-| promtool (validation des règles d'alerte) | **Non vérifié** sur ce poste |
+| promtool (validation des règles d'alerte) | **Vérifié** (`promtool check rules` : 9 règles, dont 3 pour la biométrie) |
 | Dispositif à deux PC, point d'accès sans fil, IP source réelle d'un vrai attaquant | **Non vérifié : à tester en premier sur le vrai dispositif** |
 
 ## Architecture en une page
 
 ```
 PC Attaquant ──► WAF (seul port exposé, :80)
-                  ├─ réseau edge : frontend (portail)
-                  ├─ réseau app (interne) : auth-service, payment-api, postgres
+                  ├─ réseau edge : frontend (portail, back-office)
+                  ├─ réseau app (interne) : auth-service, payment-api, face-gate, postgres
                   └─ réseau ops (interne) : prometheus, cAdvisor, loki, détecteur ML, moteur de remédiation, proxys Docker
+Back-office : identifiant ─► face-gate ─► agent hôte (caméra USB du PC Hôte, reconnaissance faciale) ─► mot de passe ─► auth-service
+                                      └──► voyant ESP8266 (WiFi du hotspot), voir docs/biometric-auth.md
 Détecteur ML ──► moteur de remédiation ──► WAF admin (bans) + proxy Docker (restart d'UN conteneur autorisé)
                                       └──► sonde : devis → connexion → paiement → relecture → grand livre → 8 s de stabilité
 Tableau de bord (React) : état perçu, latence avant/pendant/après, chronologie de l'incident
@@ -64,12 +67,9 @@ classique, sans deuxième machine ni outillage Linux. Toutes les commandes sont 
 ```powershell
 Set-Location "<chemin du projet>\Workshop2026-M2-GX-Code"
 
-# Secrets en clair, générés localement (sans SOPS/age : voir note plus bas)
-New-Item -ItemType Directory -Force .secrets | Out-Null
-foreach ($s in "db_password","remediation_token","waf_admin_token","probe_password","demo_password","grafana_password") {
-  python -c "import secrets;open('.secrets/$s','w').write(secrets.token_urlsafe(24))"
-}
-python -c "import secrets;open('.secrets/jwt_secret','w').write(secrets.token_urlsafe(48))"
+# Secrets en clair, générés localement (sans SOPS/age : voir note plus bas). Ne crée que les secrets MANQUANTS :
+# relançable sans rien changer à l'existant (catalogue : tools/secrets_catalog.py).
+python tools\secrets_catalog.py ensure
 
 # .env : mode un seul poste (voir section « Essai sur un seul poste » pour TRUSTED_PROXIES)
 @'
@@ -80,7 +80,14 @@ TRUSTED_PROXIES=172.30.10.0/24
 # Environnement Python local (scripts redteam/, entraînement du détecteur)
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -q -r services\ml-detector\requirements.txt
+
+# Agent hôte (caméra USB + reconnaissance faciale du back-office) : dépendances et modèles ONNX (≈ 39 Mo, vérifiés par SHA-256)
+.\.venv\Scripts\python.exe -m pip install -q -r host-agent\requirements.txt
+.\.venv\Scripts\python.exe host-agent\fetch_models.py
 ```
+
+> **Mise à jour d'une installation existante** (base déjà créée avant la consigne additionnelle) : appliquer la migration idempotente (habilitations, empreintes, audit), une seule fois, avec `docker compose up -d postgres` démarré :
+> `docker compose exec -T postgres sh /docker-entrypoint-initdb.d/30-biometrics.sh` (ou `sh tools/migrate_db.sh`). Une base neuve l'applique d'elle-même. Compléter aussi les secrets : `python tools\secrets_catalog.py ensure` (ou `sh tools/init_secrets.sh` sous SOPS, qui n'ajoute que les manquants).
 
 > **Pourquoi pas SOPS/age/Ansible ?** Le déploiement officiel (section plus bas) les utilise. S'ils ne
 > sont pas installés sur votre poste, cette méthode les remplace : secrets en clair dans `.secrets/`
@@ -105,12 +112,15 @@ docker compose up -d --wait --wait-timeout 240 --scale ml-detector=0
 .\.venv\Scripts\python.exe tools\smoke.py --base http://127.0.0.1
 ```
 
+Pour la connexion au back-office, lancer **dans un second terminal laissé ouvert** l'agent de la caméra : `.\host-agent\run-agent.ps1` (ou `-Fake` pour une caméra simulée, sans matériel). Sans lui, `face-gate` répond « service de reconnaissance indisponible » et personne ne se connecte au back-office (échec fermé voulu) ; le portail de paiement n'est pas concerné.
+
 `docker compose ps` doit afficher tous les services `healthy`/`Up`. Le smoke test doit afficher 4
 lignes `[OK]`. Accès :
 
 | Service | URL | Identifiants |
 |---|---|---|
 | Portail de paiement | http://127.0.0.1 | `demo-user` / `Get-Content .secrets\demo_password` |
+| **Back-office** (utilisateurs, rôles, visages, voyant, audit) | http://127.0.0.1/backoffice.html | `admin` / `Get-Content .secrets\admin_password` (puis inscrire son visage : il devient exigé) ; `operator` / `.secrets\operator_password` |
 | Tableau de bord | http://127.0.0.1:8088 | — |
 | Grafana | http://127.0.0.1:3000 | `admin` / `Get-Content .secrets\grafana_password` |
 | Prometheus (requêtes brutes uniquement, pas un tableau de bord) | http://127.0.0.1:9090 | — |
@@ -139,7 +149,8 @@ Docker Desktop s'arrête à chaque extinction du PC : c'est l'étape la plus sou
 # 1. Démarrer Docker Desktop (attendre qu'il soit prêt)
 Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"
 
-# 2. Tout relancer (modèle déjà entraîné : le détecteur démarre avec les autres)
+# 2. Agent de la caméra (autre terminal, à laisser ouvert) puis tout relancer (modèle déjà entraîné : le détecteur démarre avec les autres)
+Start-Process powershell -ArgumentList '-NoExit','-File','host-agent\run-agent.ps1'
 Set-Location "<chemin du projet>\Workshop2026-M2-GX-Code"
 docker compose up -d --wait --wait-timeout 240
 
@@ -295,7 +306,15 @@ Set-Location services\remediation-engine; ..\..\.venv\Scripts\python.exe -m pyte
 Set-Location services\ml-detector;        ..\..\.venv\Scripts\python.exe -m pytest -q tests; Set-Location ..\..
 Set-Location services\rag-assistant;      ..\..\.venv\Scripts\python.exe -m pytest -q tests; Set-Location ..\..
 Set-Location services\dashboard;          npm ci; npm test; npm run build; Set-Location ..\..
+Set-Location services\face-gate;         ..\..\.venv\Scripts\python.exe -m pytest -q tests; Set-Location ..\..
+Set-Location services\auth-service;      ..\..\.venv\Scripts\python.exe -m pytest -q tests; Set-Location ..\..
+Set-Location host-agent;                 ..\.venv\Scripts\python.exe -m pytest -q tests; Set-Location ..
+wsl sh firmware/esp8266-led/test/run-tests.sh     # logique du voyant (g++ dans WSL)
+# Bout en bout du back-office (pile démarrée + agent en caméra simulée : .\host-agent\run-agent.ps1 -Fake ; ≈ 2 min) :
+.\.venv\Scripts\python.exe tests\e2e\face_flow.py --base http://127.0.0.1
 ```
+
+Pour face-gate et auth-service : `.\.venv\Scripts\python.exe -m pip install -q "pyjwt==2.10.1" "psycopg[binary,pool]==3.2.3" cryptography==43.0.3 httpx==0.27.2` (une fois).
 
 **Résultats vérifiés sur ce poste :**
 
@@ -306,6 +325,11 @@ Set-Location services\dashboard;          npm ci; npm test; npm run build; Set-L
 | ml-detector | 8 passés |
 | rag-assistant | 10 passés (un test écrivait son fichier en cp1252 sous Windows ; corrigé en forçant `encoding="utf-8"`) |
 | dashboard | 6 passés, `npm run build` réussit |
+| face-gate | 28 passés |
+| auth-service | 15 passés |
+| agent hôte | 12 passés |
+| firmware (logique du voyant) | OK ; compilation PlatformIO réussie (RAM 35 %, flash 28 %) |
+| `tests/e2e/face_flow.py` | tous les contrôles passés (caméra simulée) |
 
 (`sh tools/check_no_plaintext_secrets.sh` nécessite un shell POSIX — non vérifié sur ce poste.)
 
@@ -397,7 +421,7 @@ Au quotidien, `docker compose up -d --wait` depuis Windows suffit (voir « Les f
 
 ## Arborescence
 
-`services/` (un dossier par composant), `infra/` (Prometheus, Loki, Grafana), `ansible/`, `redteam/`
+`services/` (un dossier par composant, dont `face-gate`), `host-agent/` (caméra + reconnaissance faciale sur le PC Hôte), `firmware/esp8266-led/` (voyant, projet PlatformIO/CLion), `infra/` (Prometheus, Loki, Grafana), `ansible/`, `redteam/`
 (scénarios d'attaque), `tests/e2e/` (banc d'essai natif et résultats), `tests/rehearsals/` (répétitions sous Docker),
 `tools/` (secrets, test de fumée, `training_session.py`, `rehearsal.py`), `docs/`, `governance/` (EBIOS RM, PCA/PRA, NIS2/DORA), `dossier/` (sources du dossier PDF et régénération de la présentation, voir `dossier/README.md`). `.venv/` (environnement Python local,
 ignoré par Git) et `services/ml-detector/data/*.csv` (jeux de trafic collectés) apparaissent une fois
@@ -405,7 +429,7 @@ le détecteur entraîné sur ce poste.
 
 ## Limites assumées
 
-Pas de TLS ni de MFA ; WAF Python « CRS-lite » (sous-ensemble de règles, pas ModSecurity/Coraza) ; une
+Pas de TLS ; double authentification (visage + mot de passe) seulement pour le back-office, **sans détection de vivacité** ; WAF Python « CRS-lite » (sous-ensemble de règles, pas ModSecurity/Coraza) ; une
 seule machine, aucune redondance ; chaîne d'approvisionnement non scannée ; détection 12 à 17 s après le
 début d'un flood (fenêtre de 3 échantillons sur 4, un tick de 5 s) ; sur un seul poste, le bannissement par IP ne peut être démontré fidèlement qu'avec
 des identités simulées (voir « Essai sur un seul poste »), pas avec de vraies IP distinctes. Liste

@@ -42,6 +42,7 @@ def secret(env: str) -> str:
 AUTH_URL = os.environ.get("AUTH_URL", "http://auth-service:8000")
 PAYMENT_URL = os.environ.get("PAYMENT_URL", "http://payment-api:8000")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://frontend:8080")
+GATE_URL = os.environ.get("GATE_URL", "http://face-gate:8000")
 UPSTREAM_TIMEOUT = float(os.environ.get("UPSTREAM_TIMEOUT", "2.5"))
 MAX_BODY = int(os.environ.get("MAX_BODY_BYTES", "65536"))
 ADMIN_TOKEN = secret("WAF_ADMIN_TOKEN_FILE")
@@ -60,6 +61,11 @@ LAT = Histogram("waf_request_duration_seconds", "Durée totale côté WAF", buck
 CONNS = Gauge("waf_connections_active", "Requêtes en cours de traitement")
 BANS_ACTIVE = Gauge("waf_bans_active", "Bans actifs")
 UP_ERR = Counter("waf_upstream_errors_total", "Erreurs vers l'amont", ["kind"])
+# Télémétrie du voyant ESP8266 (1 requête/s, jeton d'appareil) : ce n'est pas du trafic client. Les réponses 200 sont
+# comptées à part pour ne pas déformer les caractéristiques de trafic apprises par le détecteur ML ; tout échec (401,
+# 5xx...) reste compté comme n'importe quelle requête, donc visible.
+DEVICE_POLL_PATH = "/gate/device/led"
+DEVICE_POLLS = Counter("waf_device_polls_total", "Interrogations réussies du voyant ESP8266")
 
 access = logging.getLogger("waf.access")
 access.setLevel(logging.INFO)
@@ -107,6 +113,8 @@ def route_for(path: str) -> str:
         return AUTH_URL
     if path.startswith("/api/"):
         return PAYMENT_URL
+    if path.startswith("/gate/"):
+        return GATE_URL
     return FRONTEND_URL
 
 
@@ -176,15 +184,18 @@ def make_proxy_app(internal: bool) -> FastAPI:
         finally:
             CONNS.dec()
             dt = time.perf_counter() - t0
-            LAT.observe(dt)
-            REQS.labels(label_ip(ip), str(status)).inc()
+            if path == DEVICE_POLL_PATH and status == 200:
+                DEVICE_POLLS.inc()
+            else:
+                LAT.observe(dt)
+                REQS.labels(label_ip(ip), str(status)).inc()
             if action != "allow" or status >= 400 or hits:
                 # journalisation ciblée : anomalies uniquement, jamais corps ni en-têtes d'authentification
                 log_event(event="waf", listener=listener, rid=rid, client_ip=ip, method=request.method,
                           path=path[:200], status=status, action=action, rules=hits, score=score,
                           ua=request.headers.get("user-agent", "")[:120], ms=round(dt * 1000, 1))
 
-    app.add_api_route("/{full_path:path}", handler, methods=["GET", "POST", "HEAD", "OPTIONS"])
+    app.add_api_route("/{full_path:path}", handler, methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"])
 
     @app.on_event("startup")
     async def _start():

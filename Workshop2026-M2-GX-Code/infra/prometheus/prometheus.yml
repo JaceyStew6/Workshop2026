@@ -10,6 +10,8 @@ scrape_configs:
     static_configs: [{ targets: ["payment-api:8000"], labels: { service: payment-api } }]
   - job_name: auth-service
     static_configs: [{ targets: ["auth-service:8000"], labels: { service: auth-service } }]
+  - job_name: face-gate
+    static_configs: [{ targets: ["face-gate:8000"], labels: { service: face-gate } }]
   - job_name: waf
     static_configs: [{ targets: ["waf:8082"], labels: { service: waf } }]
   - job_name: ml-detector

@@ -1,5 +1,7 @@
 #!/bin/sh
-# Déchiffre secrets/secrets.enc.yaml vers .secrets/<nom> (un fichier par secret, droits 600).
+# Déchiffre secrets/secrets.enc.yaml vers .secrets/<nom> (un fichier par secret).
+# Droits : DOSSIER .secrets en 700 (seul le propriétaire le traverse), FICHIERS en 644 : Docker les monte tels quels et les
+# services tournent sous un utilisateur non privilégié (uid 10001) qui doit pouvoir les lire. La protection vient du dossier.
 # Les conteneurs reçoivent ces fichiers comme Docker secrets (/run/secrets/<nom>), jamais en variable d'environnement.
 set -eu
 cd "$(dirname "$0")/.."
@@ -14,10 +16,10 @@ for k, v in json.load(sys.stdin).items():
     with open(os.path.join(".secrets", k), "w") as f:
         f.write(v)
     try:
-        os.chmod(os.path.join(".secrets", k), 0o600)
+        os.chmod(os.path.join(".secrets", k), 0o644)
     except PermissionError:
         # Volume Windows monté dans WSL (/mnt/c, NTFS) : chmod refusé. Le fichier est créé quand même ;
         # sa protection relève alors des droits NTFS. Préférer le dépôt dans le système de fichiers WSL (~/).
-        print("  (chmod 600 impossible sur ce volume : " + k + ")", file=sys.stderr)
+        print("  (chmod 644 impossible sur ce volume : " + k + ")", file=sys.stderr)
     print("  .secrets/" + k)
 '

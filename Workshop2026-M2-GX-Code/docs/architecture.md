@@ -4,7 +4,7 @@
 La plateforme est un SI de paiement fictif en microservices conteneurisés, entouré d'une chaîne de
 cyber-résilience : observabilité, détection ML, remédiation automatique et assistant opérateur.
 
-Flux métier : client -> **WAF** (port 80) -> `frontend` (portail), `auth-service` (route `/auth/`),
+Flux métier : client -> **WAF** (port 80) -> `frontend` (portail et back-office), `face-gate` (route `/gate/`), `auth-service` (route `/auth/`),
 `payment-api` (route `/api/`) -> **PostgreSQL**.
 
 Flux de résilience : Prometheus collecte les métriques (WAF, payment-api, auth-service, cAdvisor) ->
@@ -20,13 +20,15 @@ Flux des journaux : les conteneurs écrivent des journaux JSON -> **Promtail** l
   développement unique). Sous-réseau fixe `172.30.10.0/24` (passerelle `172.30.10.1`).
 - `app` (internal) : frontend, auth-service, payment-api, postgres, WAF, Prometheus (scrape).
 - `ops` (internal) : Prometheus, Loki, Promtail, ml-detector, remediation-engine, proxys Docker, cAdvisor, WAF (écouteurs 8081 sonde et 8082 admin).
-- `mgmt` : Grafana (127.0.0.1:3000), dashboard (127.0.0.1:8088), assistant RAG (127.0.0.1:8090). Jamais joignable depuis le PC Attaquant.
+- `mgmt` : `face-gate` (seul chemin vers l'agent caméra du PC Hôte, `host.docker.internal:8095`), Grafana (127.0.0.1:3000), dashboard (127.0.0.1:8088), assistant RAG (127.0.0.1:8090). Jamais joignable depuis le PC Attaquant.
 
 ## Composants et responsabilités
 - **WAF** (`services/waf`) : reverse proxy, règles de signature (SQLi, XSS, traversée, RCE, scanners) avec score d'anomalie, liste de bans avec TTL (API d'admin authentifiée, port 8082), métriques `waf_requests_total{client_ip,status}`, journaux JSON pour le SIEM. Il ne bloque PAS sur le débit : cette décision appartient à la chaîne ML.
 - **auth-service** : JWT HS256 (15 min), mots de passe scrypt, verrouillage après 5 échecs en 5 min.
 - **payment-api** : paiements simulés avec contrôle de propriété du compte source, idempotence, invariant comptable (somme des soldes constante). Endpoint public coûteux `/api/fees/quote` = surface du scénario de saturation. Capacité volontairement bornée pour que la saturation soit visible : 0,5 CPU, pool de 3 connexions à la base, attente maximale de 0,4 s pour obtenir une connexion. Sous une attaque, devis **et** virements échouent alors franchement (HTTP 503) pour tous les clients, pas seulement l'attaquant, jusqu'à la remédiation.
-- **PostgreSQL** : rôles distincts à privilèges minimaux (`auth_svc`, `payment_svc`).
+- **face-gate** + **agent hôte** (`host-agent/`, caméra USB du PC Hôte) : authentification faciale du back-office, voyant ESP8266, inscription des visages. Voir `docs/biometric-auth.md`.
+- **Habilitations** : rôles et permissions en base, portées par le JWT (`perms`) ; administration via `/auth/admin/*` et `/gate/*`.
+- **PostgreSQL** : rôles distincts à privilèges minimaux (`auth_svc`, `payment_svc`, `gate_svc`).
 - **ml-detector** : Isolation Forest sur 7 mesures lues dans Prometheus toutes les 5 s (débit total, débit de l'IP la plus active, latence p95 sur 60 s, ratios 4xx et 5xx, CPU du processus payment-api, connexions actives). Déclenchement : 3 échantillons sur 4 au-dessus du seuil de 0,70, un incident par épisode. Entraîné sur 132 min de trafic réel de cette pile (phases actives et inactives). Détection mesurée : 12 à 17 s après le début d'un flood.
 - **remediation-engine** : machine à états DETECTED, DECIDING, REMEDIATING, VERIFYING, RECOVERED / CONTAINED / ESCALATED. Cibles autorisées par configuration, budget de redémarrages, accès Docker par proxy filtré.
 - **dashboard** : état perçu du service (up / degraded / down) avant, pendant et après l'incident, timeline des étapes.

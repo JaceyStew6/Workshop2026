@@ -56,6 +56,13 @@ reçoit un 403 et rien n'est collecté). Limite connue : après un redémarrage 
 ne sont pas tous retransmis (Loki refuse les entrées « trop anciennes » par rapport à celles déjà reçues) ; pour
 l'investigation d'un incident passé, utiliser aussi `docker compose logs <service>` et `tests/rehearsals/`.
 
+## Biométrie
+Voir `docs/biometric-auth.md`. Alertes : `FaceAuthFailures` (≥ 3 échecs de visage/mot de passe en 2 min : consulter l'onglet Audit du back-office, rechercher l'IP), `CameraOnTooLong` (caméra allumée > 3 min : bouton « Forcer l'extinction » de l'onglet Voyant et caméra, ou fermer l'agent hôte ; l'agent l'éteint seul de toute façon), `LedDeviceOffline` (ESP hors ligne : WiFi, alimentation ; sans conséquence sur la sécurité, le voyant s'éteint).
+- **Compte bloqué 5 min** : attendre (le blocage est en mémoire de `face-gate`) ou `docker compose restart face-gate` (efface les blocages ; à tracer).
+- **Caméra HS ou agent arrêté, plus personne ne peut se connecter au back-office** (échec fermé voulu) : relancer `.\host-agent\run-agent.ps1`. Si la caméra est définitivement perdue, accès de secours **depuis le PC Hôte uniquement** (la base n'est pas exposée) : `docker compose exec -T postgres psql -U postgres_admin -d payments -c "UPDATE users SET face_required=false WHERE username='admin'"`, se connecter par mot de passe, réinscrire un visage. Cette opération contourne le second facteur : à consigner par écrit.
+- **Retirer un visage / un utilisateur** : back-office, onglets Visages / Utilisateurs (désactiver le compte, ne pas le supprimer : l'historique des virements le référence).
+- **Faux rejets fréquents** : relancer `selftest.py` (lumière de face, une seule personne, 50 cm à 1 m), réinscrire le visage dans les conditions réelles, ajuster `FACE_THRESHOLD`.
+
 ## Remettre la démonstration à zéro
 `ansible-playbook ansible/reset-demo.yml` (12 s mesurées) efface les bans, l'historique d'incidents et l'état du détecteur, puis relance le smoke test.
 Sans Ansible : débannir l'identité utilisée (voir « Ban ») et `docker compose restart ml-detector remediation-engine`.

@@ -80,6 +80,7 @@ def risk_score(seed: str, iterations: int = RISK_ITER) -> int:
 class Principal(BaseModel):
     sub: str
     role: str
+    perms: list[str] = []
 
 
 def current_user(authorization: Optional[str] = Header(default=None)) -> Principal:
@@ -90,7 +91,16 @@ def current_user(authorization: Optional[str] = Header(default=None)) -> Princip
                             options={"require": ["exp", "sub", "iss"]})
     except jwt.PyJWTError:
         raise HTTPException(401, "Jeton invalide ou expiré")
-    return Principal(sub=claims["sub"], role=claims.get("role", "user"))
+    return Principal(sub=claims["sub"], role=claims.get("role", "user"), perms=claims.get("perms", []))
+
+
+def require(perm: str):
+    """Habilitation portée par le JWT (émise par auth-service d'après le rôle). Pas de permission = 403."""
+    def dep(user: Principal = Depends(current_user)) -> Principal:
+        if perm not in user.perms:
+            raise HTTPException(403, "Habilitation insuffisante")
+        return user
+    return dep
 
 
 class PaymentIn(BaseModel):
@@ -120,7 +130,7 @@ def fee_quote(amount: float = Query(gt=0, le=10000)):
 
 
 @app.post("/api/payments", status_code=201)
-def create_payment(p: PaymentIn, user: Principal = Depends(current_user)):
+def create_payment(p: PaymentIn, user: Principal = Depends(require("payments:create"))):
     if p.src == p.dst:
         raise HTTPException(422, "Comptes source et destination identiques")
     if user.role == "probe" and not ({p.src, p.dst} <= PROBE_ACCOUNTS):
@@ -166,7 +176,7 @@ def create_payment(p: PaymentIn, user: Principal = Depends(current_user)):
 
 
 @app.get("/api/payments/{tx_id}")
-def get_payment(tx_id: uuid.UUID, user: Principal = Depends(current_user)):
+def get_payment(tx_id: uuid.UUID, user: Principal = Depends(require("payments:read"))):
     try:
         with pool.connection() as conn:
             row = conn.execute(
@@ -181,7 +191,7 @@ def get_payment(tx_id: uuid.UUID, user: Principal = Depends(current_user)):
 
 
 @app.get("/api/payments")
-def list_payments(limit: int = Query(10, ge=1, le=100), user: Principal = Depends(current_user)):
+def list_payments(limit: int = Query(10, ge=1, le=100), user: Principal = Depends(require("payments:read"))):
     try:
         with pool.connection() as conn:
             rows = conn.execute(

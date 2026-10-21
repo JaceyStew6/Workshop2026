@@ -44,6 +44,12 @@ secrets:
   probe_password:     { file: ./.secrets/probe_password }
   demo_password:      { file: ./.secrets/demo_password }
   grafana_password:   { file: ./.secrets/grafana_password }
+  face_ticket_secret: { file: ./.secrets/face_ticket_secret }   # signe le ticket facial (face-gate -> auth-service)
+  face_template_key:  { file: ./.secrets/face_template_key }    # chiffre les empreintes faciales (AES-256-GCM)
+  face_agent_token:   { file: ./.secrets/face_agent_token }     # face-gate <-> agent caméra du PC Hôte
+  device_token:       { file: ./.secrets/device_token }         # ESP8266 (voyant)
+  admin_password:     { file: ./.secrets/admin_password }
+  operator_password:  { file: ./.secrets/operator_password }
 
 services:
   # ---------------------------------------------------------------- EDGE
@@ -61,6 +67,7 @@ services:
       AUTH_URL: http://auth-service:8000
       PAYMENT_URL: http://payment-api:8000
       FRONTEND_URL: http://frontend:8080
+      GATE_URL: http://face-gate:8000
       WAF_ADMIN_TOKEN_FILE: /run/secrets/waf_admin_token
       BAN_FILE: /var/lib/waf/bans.json
       NEVER_BAN: ${HOST_IP:-192.168.137.1}   # anti-lockout du PC Hôte
@@ -74,6 +81,7 @@ services:
       payment-api: { condition: service_healthy }
       auth-service: { condition: service_healthy }
       frontend: { condition: service_started }
+      face-gate: { condition: service_started }
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8081/healthz', timeout=2)"]
       interval: 5s
@@ -97,7 +105,7 @@ services:
       args:
         PIP_EXTRA_ARGS: ${PIP_EXTRA_ARGS:-}
     networks: [app]
-    secrets: [db_password, jwt_secret, demo_password, probe_password]
+    secrets: [db_password, jwt_secret, demo_password, probe_password, face_ticket_secret, admin_password, operator_password]
     environment:
       DB_HOST: postgres
       DB_NAME: payments
@@ -106,10 +114,49 @@ services:
       JWT_SECRET_FILE: /run/secrets/jwt_secret
       DEMO_PASSWORD_FILE: /run/secrets/demo_password
       PROBE_PASSWORD_FILE: /run/secrets/probe_password
+      FACE_TICKET_SECRET_FILE: /run/secrets/face_ticket_secret
+      ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+      OPERATOR_PASSWORD_FILE: /run/secrets/operator_password
     read_only: true
     tmpfs: [/tmp]
     depends_on:
       postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    mem_limit: 256m
+
+  face-gate:
+    <<: *hardened
+    # Décision d'accès biométrique : dialogue avec l'agent caméra du PC Hôte (host-agent/) et pilote le voyant ESP8266.
+    # Réseau app : joint par le WAF, parle à postgres et auth-service. Réseau mgmt (non `internal`) : seul chemin
+    # vers le PC Hôte (host.docker.internal:8095, agent lié à 127.0.0.1 + jeton). Aucun port publié.
+    build:
+      context: ./services/face-gate
+      args:
+        PIP_EXTRA_ARGS: ${PIP_EXTRA_ARGS:-}
+    networks: [app, mgmt]
+    secrets: [db_password, jwt_secret, face_ticket_secret, face_template_key, face_agent_token, device_token]
+    environment:
+      DB_HOST: postgres
+      DB_NAME: payments
+      DB_USER: gate_svc
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
+      FACE_TICKET_SECRET_FILE: /run/secrets/face_ticket_secret
+      FACE_TEMPLATE_KEY_FILE: /run/secrets/face_template_key
+      FACE_AGENT_TOKEN_FILE: /run/secrets/face_agent_token
+      DEVICE_TOKEN_FILE: /run/secrets/device_token
+      AGENT_URL: ${FACE_AGENT_URL:-http://host.docker.internal:8095}
+      AUTH_URL: http://auth-service:8000
+      FACE_THRESHOLD: ${FACE_THRESHOLD:-0.40}
+    read_only: true
+    tmpfs: [/tmp]
+    depends_on:
+      postgres: { condition: service_healthy }
+      auth-service: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
       interval: 5s

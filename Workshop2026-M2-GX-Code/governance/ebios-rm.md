@@ -63,6 +63,11 @@ payment-api, auth-service, PostgreSQL, WAF, remediation-engine, ml-detector, pro
 | R8 | **Chaîne d'approvisionnement** : image ou paquet compromis | 4 | 2 | 8 élevé |
 | R9 | **Secrets** exposés (dépôt, archive, variables d'environnement) | 3 | 3 | 9 élevé |
 | R10 | **Interception** du trafic en clair (jetons JWT) sur le réseau du point d'accès | 3 | 2 | 6 moyen |
+| R11 | **Usurpation du visage** (photo, vidéo) pour franchir l'étape de reconnaissance du back-office | 4 | 3 | 12 critique |
+| R12 | **Fuite des données biométriques** (empreintes faciales en base, RGPD art. 9) | 4 | 2 | 8 élevé |
+| R13 | **Détournement de la caméra** (allumage non voulu, agent hôte atteint depuis le réseau) | 3 | 2 | 6 moyen |
+| R14 | **Verrouillage volontaire** d'un administrateur (échecs répétés) ou **indisponibilité** de la caméra : plus d'accès au back-office | 3 | 3 | 9 élevé |
+| R15 | **Voyant ESP8266** : jeton d'appareil écouté (HTTP clair), faux voyant vert, appareil piraté | 2 | 3 | 6 moyen |
 
 ### Mesures implémentées et preuves
 | Risque | Mesures (dans le dépôt) | Preuve vérifiable |
@@ -77,6 +82,11 @@ payment-api, auth-service, PostgreSQL, WAF, remediation-engine, ml-detector, pro
 | R8 | Versions épinglées dans les `requirements.txt` et les images, proxys officiels. La vérification des certificats TLS est **active par défaut** au build ; sur un réseau qui intercepte TLS elle peut être désactivée explicitement, pendant le build uniquement (`PIP_EXTRA_ARGS`, `NPM_STRICT_SSL` dans `.env`) : c'est une exposition à une interception pendant le build, à réserver à ce cas | **Aucun scan automatisé** : risque non traité, voir ci-dessous |
 | R9 | SOPS + age, Docker secrets (fichiers, pas de variables d'environnement), `.gitignore`, contrôle automatique avant archive | Cycle complet exécuté sous WSL : `init_secrets.sh` (SOPS + age), déchiffrement par `ansible/deploy.yml`, déploiement réussi avec ces secrets ; `secrets.enc.yaml` vérifié chiffré, aucune clé privée dans le dépôt ; `tools/check_no_plaintext_secrets.sh` exécuté. Sur ce poste, la clé privée age est dans le répertoire personnel de la distribution WSL (`~/.config/sops/age/keys.txt`) : à sauvegarder hors dépôt |
 | R10 | **Aucune mesure** (écart assumé) | — |
+| R11 | Second facteur obligatoire (mot de passe) vérifié par `auth-service` avec un **ticket facial signé à usage unique** (un mot de passe volé ne suffit pas, un visage usurpé non plus) ; blocage 5 min après 2 échecs ; 3 images sur 5 doivent concorder ; plusieurs visages / visage trop petit rejetés ; audit et alerte `FaceAuthFailures` | `services/face-gate/tests` (28), `services/auth-service/tests` (15), `tests/e2e/face_flow.py`. **Pas de détection de vivacité** : une photo de qualité peut passer l'étape visage (risque résiduel principal) |
+| R12 | Empreintes de 128 nombres uniquement (jamais d'image), **AES-256-GCM** avec clé distincte (`face_template_key`) et identifiant lié au chiffré ; rôle SQL `gate_svc` à colonnes limitées ; suppression par l'interface ; aucun score ni vecteur dans les journaux | Test de chiffrement et de liaison à l'utilisateur (`test_gate.py`), `30-biometrics.sh` (droits). Base et clé sur le même hôte : un attaquant root de l'hôte obtient les deux |
+| R13 | Caméra éteinte par défaut, ouverte à la demande avec **chien de garde** (extinction seule), agent lié à `127.0.0.1` + jeton, refus de démarrer ailleurs, aucune image conservée ni transmise, bouton d'arrêt d'urgence, alerte `CameraOnTooLong` | `host-agent/tests` (12), e2e (caméra éteinte après chaque scénario) |
+| R14 | Échec **fermé** assumé (sécurité > disponibilité du back-office) ; blocage **par identifiant** limité à 5 min ; accès de secours documenté depuis le PC Hôte (`docs/runbooks.md#biometrie`) ; le portail de paiement et la chaîne de résilience n'en dépendent pas | Test « agent indisponible : aucune pénalité, aucune ouverture » |
+| R15 | Jeton d'appareil dédié (ne donne que l'état du voyant), comparaison en temps constant ; extinction sûre en 5 s sans réponse ; le voyant n'est qu'un **indicateur** : aucune décision d'accès n'en dépend | `led_logic.h` testé (`firmware/esp8266-led/test`), compilation PlatformIO |
 
 ## Atelier 5 : risque résiduel et plan d'action
 | Risque | Niveau initial | Niveau résiduel | Justification | Action recommandée à une direction |
@@ -91,8 +101,13 @@ payment-api, auth-service, PostgreSQL, WAF, remediation-engine, ml-detector, pro
 | R8 | 8 élevé | 8 élevé | **Non traité** | Scan d'images (Trivy), signature, miroir interne de dépendances |
 | R9 | 9 élevé | 3 faible | Contrôles testés | Rotation périodique, coffre (Vault) en production |
 | R10 | 6 moyen | 6 moyen | **Écart assumé** | TLS partout (autorité de certification interne) avant tout usage réel |
+| R11 | 12 critique | **8 élevé** | Deux facteurs + blocage, mais **pas de vivacité** : une photo peut tromper SFace | Détection de vivacité (infrarouge, défi aléatoire), seuil calibré sur des mesures de faux accepté/faux rejeté |
+| R12 | 8 élevé | 4 moyen | Chiffrement et minimisation ; clé et base sur le même hôte | Clé dans un coffre (HSM / Vault), analyse d'impact (AIPD) et base légale RGPD avant tout usage réel |
+| R13 | 6 moyen | 3 faible | Plusieurs barrières indépendantes, extinction garantie | — |
+| R14 | 9 élevé | 6 moyen | Échec fermé voulu ; le secours exige l'accès à l'hôte | Deuxième administrateur avec second facteur de secours (clé matérielle) |
+| R15 | 6 moyen | 3 faible | Indicateur seulement, échec sûr | HTTPS avec certificat épinglé si l'ESP devient un élément de sécurité |
 
-Risques acceptés explicitement pour le prototype : R5, R10. Risque **non traité** et à signaler au commanditaire : R8.
+Risques acceptés explicitement pour le prototype : R5, R10. Risque biométrique principal à signaler : **R11 (pas de détection de vivacité)**. Risque **non traité** et à signaler au commanditaire : R8.
 
 ## Pour le jury : lecture de l'arbitrage
 Ce que nous avons choisi de protéger en priorité : **la disponibilité prouvée du paiement (VM1) et l'intégrité du grand livre (VM2)**, parce qu'ils sont mesurables par une transaction réelle et un invariant comptable. Ce que nous avons accepté de ne pas faire : TLS, MFA, scan d'images. La compromission d'un composant privilégié (R4) est le risque que la plateforme **introduit elle-même** en se défendant : c'est pourquoi le moteur est le composant le plus contraint du dépôt.

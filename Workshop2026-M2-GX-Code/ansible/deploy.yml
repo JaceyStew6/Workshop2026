@@ -20,11 +20,17 @@
         mode: "0644"
         force: false
 
-    - name: Secrets déchiffrés (SOPS + age)
+    - name: Secrets complétés dans le fichier chiffré (idempotent : n'ajoute que les manquants, ne change aucun existant)
+      ansible.builtin.command:
+        cmd: sh tools/init_secrets.sh
+        chdir: "{{ project_dir }}"
+      changed_when: false
+
+    - name: Secrets déchiffrés (SOPS + age) vers .secrets/
       ansible.builtin.command:
         cmd: sh tools/render_secrets.sh
         chdir: "{{ project_dir }}"
-        creates: "{{ project_dir }}/.secrets/db_password"
+      changed_when: false
 
     - name: Le modèle ML entraîné sur le trafic réel existe
       ansible.builtin.stat:
@@ -43,6 +49,18 @@
         cmd: docker compose build
         chdir: "{{ project_dir }}"
       changed_when: true
+
+    - name: Base de données démarrée seule (pour la migration)
+      ansible.builtin.command:
+        cmd: docker compose up -d --wait --wait-timeout 120 postgres
+        chdir: "{{ project_dir }}"
+      changed_when: false
+
+    - name: Migration idempotente (habilitations, empreintes faciales, audit) sur la base existante
+      ansible.builtin.command:
+        cmd: sh tools/migrate_db.sh
+        chdir: "{{ project_dir }}"
+      changed_when: false
 
     - name: Démarrage et attente de la santé de tous les services
       ansible.builtin.command:

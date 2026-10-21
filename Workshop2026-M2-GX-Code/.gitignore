@@ -7,6 +7,8 @@ node_modules/
 services/dashboard/dist/
 backups/
 models/iforest.joblib
+host-agent/models/*.onnx
+host-agent/.pytest_cache/
 .pytest_cache/
 *.key
 keys.txt

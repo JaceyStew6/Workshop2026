@@ -14,6 +14,8 @@ from pathlib import Path
 from PIL import Image
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
+from pptx.opc.constants import RELATIONSHIP_TYPE as RT
+from pptx.oxml.ns import qn
 from pptx.util import Emu
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,6 +46,20 @@ def set_paragraphs(sh, texts):
             extra._r.getparent().remove(extra._r)
     for extra in paras[len(texts):]:
         extra._p.getparent().remove(extra._p)
+
+
+def clone_slide(prs, src):
+    """Copie une diapositive (formes et images) à la fin de la présentation, avec la même mise en page."""
+    new = prs.slides.add_slide(src.slide_layout)
+    for sh in list(new.shapes):
+        sh._element.getparent().remove(sh._element)
+    for sh in src.shapes:
+        new.shapes._spTree.append(copy.deepcopy(sh._element))
+    for blip in new.shapes._spTree.iter(qn("a:blip")):
+        rid = blip.get(qn("r:embed"))
+        if rid:
+            blip.set(qn("r:embed"), new.part.relate_to(src.part.related_part(rid), RT.IMAGE))
+    return new
 
 
 def set_notes(slide, text):
@@ -122,19 +138,19 @@ def main():
         "Le RAG a été testé avec un faux modèle (10 tests) ; Ollama n'a pas été exécuté.")
 
     # Diapo 8 : cybersécurité
-    set_paragraphs(shape(S[8], "Text 13"), ["6 règles d'alerte MITRE ATT&CK validées par promtool ; journaux JSON dans Loki (vérifié en direct)."])
+    set_paragraphs(shape(S[8], "Text 13"), ["9 règles d'alerte MITRE ATT&CK validées par promtool (dont 3 biométrie) ; journaux JSON dans Loki."])
 
     # Diapo 9 : gouvernance
     set_paragraphs(shape(S[9], "Text 16"), [
-        "PCA/PRA : 6 scénarios, ordre de reconstruction, sauvegarde et restauration rejouées sous Docker (Ansible, 19 s). "
-        "NIS2 et DORA : cartographie couvert / partiel / écart, sans prétention de conformité."])
+        "PCA/PRA : 7 scénarios, ordre de reconstruction, sauvegarde et restauration rejouées sous Docker (Ansible, 19 s). "
+        "NIS2 et DORA : cartographie couvert / partiel / écart, sans prétention de conformité. EBIOS : 15 risques, dont la biométrie."])
 
     # Diapo 10 : ce qui reste à prouver (le point 2, en rouge, reste le risque principal)
-    items = [("Text 4", "Text 5", "Assistant RAG avec Ollama réel", "Installer Ollama, calibrer le seuil de pertinence"),
+    items = [("Text 4", "Text 5", "Caméra réelle et ESP8266 physique", "Faux rejets/accepts sur vrais visages ; flasher le firmware (CLion)"),
              ("Text 8", "Text 9", "Attaque depuis un second PC", "Lire l'IP source vue par le WAF, TRUSTED_PROXIES vide"),
              ("Text 12", "Text 13", "Détecteur sur le dispositif final", "Réentraîner (≥ 2 h), puis répéter 3 fois depuis le PC Attaquant"),
-             ("Text 16", "Text 17", "Vidéo de 60 s sans coupe", "Filmer une exécution réelle depuis le PC Attaquant"),
-             ("Text 20", "Text 21", "TLS, MFA, scan d'images", "Écarts assumés, premiers sujets d'une feuille de route")]
+             ("Text 16", "Text 17", "Vidéo de 60 s ; RAG avec Ollama réel", "Filmer depuis le PC Attaquant ; installer Ollama et calibrer"),
+             ("Text 20", "Text 21", "TLS, vivacité faciale, scan d'images", "Écarts assumés, premiers sujets d'une feuille de route")]
     for left, right, title, action in items:
         set_paragraphs(shape(S[10], left), [title])
         set_paragraphs(shape(S[10], right), [action])
@@ -143,6 +159,32 @@ def main():
         "Poser le cadre du jury : nous préférons dire ce qui n'est pas prouvé. Prouvé depuis la dernière version : la composition Docker (16 services), "
         "le déploiement Ansible avec secrets chiffrés, Loki, le détecteur entraîné sur 132 minutes et trois répétitions réussies. "
         "Le point 2 (second PC, IP source) conditionne tout le bannissement par IP : sur un seul poste le WAF ne voit que la passerelle.")
+
+    # Nouvelle diapo après la 8 : consigne additionnelle 1 (copie de la mise en page « 4 cartes » de la diapo 8)
+    s = clone_slide(prs, S[8])
+    set_paragraphs(shape(s, "Titre"), ["Back-office biométrique"])
+    set_paragraphs(shape(s, "Message"), ["Visage, mot de passe, voyant : un second facteur contrôlé côté serveur."])
+    cards = [("Text 4", "Text 5", "Trois étapes",
+              "Identifiant, visage (caméra du PC Hôte), mot de passe ; ticket facial signé à usage unique."),
+             ("Text 8", "Text 9", "Voyant ESP8266",
+              "Éteint par défaut ; vert clignotant puis fixe 30 s ; rouge fixe 30 s ou clignotant 10 fois ; blocage 5 min."),
+             ("Text 12", "Text 13", "Habilitations",
+              "Rôles et permissions portés par le jeton, pas d'escalade, audit de chaque action."),
+             ("Text 16", "Text 17", "Prouvé / non prouvé",
+              "Bout en bout vérifié (caméra simulée), firmware compilé. Non vérifié : vraie caméra, ESP physique ; pas de vivacité.")]
+    for t, b, title, body in cards:
+        set_paragraphs(shape(s, t), [title])
+        set_paragraphs(shape(s, b), [body])
+    set_notes(s,
+        "Consigne additionnelle 1. Docker ne transmet pas une caméra USB à un conteneur Linux : la caméra et la reconnaissance faciale "
+        "(OpenCV, YuNet + SFace) tournent donc sur le PC Hôte, et le service face-gate décide. Un mot de passe volé ne suffit pas : "
+        "auth-service exige un ticket facial signé, à usage unique, que le navigateur ne voit jamais. Test de bout en bout avec les vrais délais "
+        "(rouge fixe 30 s, rouge clignotant 10 s, vert fixe 30,3 s mesurés, blocage 5 min). Dire clairement : caméra simulée pour ce test, "
+        "ESP8266 jamais flashé (firmware compilé, logique testée sur PC), aucune détection de vivacité : une photo peut tromper le modèle.")
+    lst = prs.slides._sldIdLst
+    last = list(lst)[-1]
+    lst.remove(last)
+    lst.insert(8, last)
 
     prs.save(a.out)
     print("écrit :", a.out)

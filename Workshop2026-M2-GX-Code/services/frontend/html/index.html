@@ -4,42 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Portail de paiement (fictif)</title>
-<style>
-  :root { --bg:#f6f7f9; --fg:#14213d; --card:#fff; --ok:#1a7f4b; --ko:#b3261e; --line:#d9dde3; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#0f1420; --fg:#e8ecf4; --card:#182033; --line:#2a3550; } }
-  body { margin:0; font:16px/1.5 system-ui,sans-serif; background:var(--bg); color:var(--fg); }
-  main { max-width:520px; margin:0 auto; padding:24px 16px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin:16px 0; }
-  label { display:block; margin:10px 0 4px; font-size:14px; }
-  input { width:100%; box-sizing:border-box; padding:8px; border:1px solid var(--line); border-radius:6px; background:transparent; color:inherit; font:inherit; }
-  button { margin-top:14px; padding:9px 16px; border:0; border-radius:6px; background:#2a5bd7; color:#fff; font:inherit; cursor:pointer; }
-  .banner { font-size:13px; padding:6px 10px; border-radius:6px; background:#fff3cd; color:#664d03; }
-  #out { white-space:pre-wrap; font:13px/1.4 ui-monospace,monospace; }
-  .ok { color:var(--ok); } .ko { color:var(--ko); }
-</style>
+<link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <main>
   <h1>Portail de paiement</h1>
   <p class="banner">Environnement de démonstration : toutes les données sont fictives.</p>
 
-  <section class="card" id="login">
-    <h2>Connexion</h2>
-    <label for="u">Identifiant</label><input id="u" autocomplete="username" value="demo-user">
-    <label for="p">Mot de passe</label><input id="p" type="password" autocomplete="current-password">
-    <button id="bl">Se connecter</button>
-  </section>
+  <section class="card" id="login"></section>
 
   <section class="card" id="pay" hidden>
     <h2>Nouveau virement</h2>
     <label for="src">Compte source</label><input id="src" value="ACC-DEMO-1">
     <label for="dst">Compte destinataire</label><input id="dst" value="ACC-DEMO-2">
     <label for="amt">Montant (EUR)</label><input id="amt" type="number" min="0.01" max="10000" step="0.01" value="25.00">
-    <button id="bq">Estimer les frais</button> <button id="bp">Valider le virement</button>
+    <div class="row"><button id="bq" type="button">Estimer les frais</button> <button id="bp" type="button">Valider le virement</button></div>
   </section>
 
   <section class="card"><h2>Résultat</h2><div id="out">En attente.</div></section>
+  <p class="muted"><a href="/backoffice.html">Back-office (administration)</a></p>
 </main>
+<script src="/common.js"></script>
+<script src="/login.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

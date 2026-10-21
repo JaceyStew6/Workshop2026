@@ -32,3 +32,19 @@ groups:
         for: 15s
         labels: { severity: critical }
         annotations: { summary: "Composant injoignable par Prometheus" }
+      # --- Authentification biométrique (face-gate) : voir docs/biometric-auth.md et docs/runbooks.md#biometrie
+      - alert: FaceAuthFailures
+        expr: sum(increase(gate_auth_total{event=~"face|password",result=~"denied|failed|blocked"}[2m])) >= 3
+        for: 0s
+        labels: { severity: high, mitre: "T1110" }
+        annotations: { summary: "Plusieurs échecs d'authentification faciale/mot de passe sur le back-office", runbook: "docs/runbooks.md#biometrie" }
+      - alert: CameraOnTooLong
+        expr: gate_camera_on == 1
+        for: 3m
+        labels: { severity: high }
+        annotations: { summary: "La caméra du PC Hôte est restée allumée plus de 3 minutes (extinction attendue)", runbook: "docs/runbooks.md#biometrie" }
+      - alert: LedDeviceOffline
+        expr: gate_device_online == 0
+        for: 2m
+        labels: { severity: low }
+        annotations: { summary: "Le voyant ESP8266 n'interroge plus la passerelle (WiFi, alimentation ou firmware)", runbook: "docs/runbooks.md#biometrie" }

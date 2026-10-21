@@ -13,8 +13,10 @@ PW="$(cat "$RUN/.secrets/db_password")"
 su postgres -c "psql -v ON_ERROR_STOP=1 -c \"DROP DATABASE IF EXISTS payments\"" >/dev/null
 su postgres -c "psql -v ON_ERROR_STOP=1 -c \"DROP ROLE IF EXISTS auth_svc\"" >/dev/null 2>&1 || true
 su postgres -c "psql -c \"DROP ROLE IF EXISTS payment_svc\"" >/dev/null 2>&1 || true
+su postgres -c "psql -c \"DROP ROLE IF EXISTS gate_svc\"" >/dev/null 2>&1 || true
 su postgres -c "psql -c \"DROP ROLE IF EXISTS postgres_admin\"" >/dev/null 2>&1 || true
 su postgres -c "psql -v ON_ERROR_STOP=1 -c \"CREATE ROLE postgres_admin SUPERUSER LOGIN\" -c \"CREATE DATABASE payments OWNER postgres_admin\"" >/dev/null
 su postgres -c "psql -v ON_ERROR_STOP=1 -d payments -f $HERE/services/postgres/init/10-schema.sql" >/dev/null
 su postgres -c "POSTGRES_USER=postgres POSTGRES_DB=payments DB_PASSWORD_FILE=$RUN/.secrets/db_password sh $HERE/services/postgres/init/20-roles.sh"
+su postgres -c "POSTGRES_USER=postgres POSTGRES_DB=payments DB_PASSWORD_FILE=$RUN/.secrets/db_password sh $HERE/services/postgres/init/30-biometrics.sh" >/dev/null
 echo "base prête : payments / rôles auth_svc, payment_svc (secrets dans $RUN/.secrets)"
