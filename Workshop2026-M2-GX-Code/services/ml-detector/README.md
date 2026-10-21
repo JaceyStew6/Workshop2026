@@ -1,7 +1,7 @@
 # ml-detector : détection d'anomalies (domaine IA / Data)
 
 ## Rôle dans la chaîne
-`Prometheus --(8 métriques / 5 s)--> ml-detector --(POST /v1/incidents)--> remediation-engine`
+`Prometheus --(7 mesures / 5 s)--> ml-detector --(POST /v1/incidents)--> remediation-engine`
 
 Le détecteur **décide qu'il y a une anomalie** et la qualifie grossièrement. Il n'agit jamais
 sur les conteneurs : seul le moteur de remédiation le fait, avec une liste d'actions fermée.
@@ -39,10 +39,14 @@ pytest tests                                     # 8 tests, ~5 s
 python train.py --out ../../models/iforest.dev-simulated.joblib
 python evaluate.py --model ../../models/iforest.dev-simulated.joblib
 
-# Avec la vraie stack (plus il y a de données, mieux c'est ; inclure des périodes SANS trafic) :
-python ../../redteam/normal_traffic.py --base http://192.168.137.1 --minutes 120   # >= 2 h, rafales incluses
-python collect.py --prom http://localhost:9090 --minutes 120 --out data/normal.csv
+# Avec la vraie stack (plus il y a de données, mieux c'est ; inclure des périodes SANS trafic).
+# Procédure complète, commandes PowerShell et pièges : README racine, « Entraîner le détecteur ». En résumé :
+docker compose stop ml-detector                      # une fausse alerte bannirait le générateur de trafic
+python ../../tools/training_session.py --hours 2.2   # ~2 h 12 : phases actives (rafales) et phases d'inactivité
+python collect.py --prom http://localhost:9090 --end <session_end du journal> --minutes 134 --out data/normal.csv
 python train.py --csv data/normal.csv --out ../../models/iforest.joblib
+docker compose up -d ml-detector
+# train.py rejette tout seul les lignes à taux d'erreur > 30 % (incident survenu pendant la collecte)
 # après une attaque de test, exporter avec la fenêtre étiquetée puis :
 python collect.py --prom http://localhost:9090 --minutes 20 --label-from <ISO> --label-to <ISO> --out data/labeled.csv
 python evaluate.py --model ../../models/iforest.joblib --csv data/labeled.csv
@@ -60,7 +64,21 @@ la chaîne fonctionne ; ils ne mesurent pas la performance réelle. À refaire s
 | 20 floods 120-600 req/s | 20/20 détectés, délai médian 10 s, max 15 s |
 | 10 floods faibles 60-120 req/s | 10/10 détectés, délai médian 15 s, max 25 s |
 
-## Résultats sur la plateforme réelle (banc d'essai natif, voir `tests/e2e/results/README.md`)
+## Résultats sur la plateforme sous Docker (modèle courant, `tests/rehearsals/README.md`)
+Entraînement sur **132 min** de trafic légitime (`tools/training_session.py` : 9 phases actives d'intensité variable avec
+rafales, 9 phases d'inactivité, 1 609 échantillons dont 29 % au calme ; 7 mesures ; découpage par blocs alternés).
+
+| Mesure | Résultat |
+|---|---|
+| Score sur les données normales | moyenne 0,45 ; 0,44 % des échantillons au-dessus du seuil de 0,70 (un incident exige 3 sur 4 consécutifs) |
+| Score au repos, 5 min en direct | entre 0,40 et 0,58, aucun échantillon ≥ 0,70 (58/58 sous le seuil) |
+| 3 répétitions d'attaque (300, 300, 500 req/s) | 3/3 `RECOVERED`, détection en 11,9 / 16,6 / 13,6 s, score 0,77 ; reprise en 21,0 / 28,5 / 25,4 s pendant que l'attaque continue |
+
+**Limites qui restent** : l'attaquant est simulé sur la même machine ; 132 min restent proches du minimum
+raisonnable (à répéter après toute modification de la plateforme ou de l'hôte : un redémarrage du PC a déjà suffi
+à déplacer la ligne de base) ; une attaque lente et discrète, sans dégradation visible, n'est pas détectée.
+
+## Anciens résultats (banc d'essai natif, voir `tests/e2e/results/README.md`)
 Entraînement sur **15 min de trafic légitime actif** (177 mesures) puis **5 min d'inactivité** (61 mesures) : c'est **peu**
 (le README du simulateur recommande ≥ 2 h). Résultats :
 

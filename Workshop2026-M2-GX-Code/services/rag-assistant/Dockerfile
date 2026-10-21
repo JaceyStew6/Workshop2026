@@ -2,7 +2,9 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org $(grep -v -E '^pytest' requirements.txt)
+# Réseau qui intercepte TLS (proxy, antivirus) : PIP_EXTRA_ARGS dans .env, voir README. Vide par défaut.
+ARG PIP_EXTRA_ARGS=""
+RUN pip install --no-cache-dir ${PIP_EXTRA_ARGS} $(grep -v -E '^pytest' requirements.txt)
 COPY rag.py app.py ./
 RUN useradd -r -u 10001 svc && mkdir -p /data/index && chown svc /data/index
 USER 10001

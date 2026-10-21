@@ -1,0 +1,26 @@
+cible validée : 127.0.0.1
+[19:08:20] ATTAQUE démarrée : 500 req/s pendant 120s vers http://127.0.0.1 (identité simulée pour le WAF : 198.51.100.63)
+[19:08:25] envoyées=306 codes={200: 151, 503: 155} erreurs={}
+[19:08:30] envoyées=593 codes={200: 298, 503: 295} erreurs={}
+[19:08:35] envoyées=1071 codes={200: 418, 503: 420, 403: 233} erreurs={}
+[19:08:40] envoyées=1875 codes={200: 418, 503: 420, 403: 1037} erreurs={}
+[19:08:45] envoyées=3990 codes={200: 418, 503: 420, 403: 3152} erreurs={}
+[19:08:50] envoyées=6157 codes={200: 418, 503: 420, 403: 5319} erreurs={}
+[19:08:55] envoyées=8180 codes={200: 418, 503: 420, 403: 7342} erreurs={}
+[19:09:00] envoyées=10337 codes={200: 418, 503: 420, 403: 9499} erreurs={}
+[19:09:05] envoyées=12444 codes={200: 418, 503: 420, 403: 11606} erreurs={}
+[19:09:10] envoyées=14553 codes={200: 418, 503: 420, 403: 13715} erreurs={}
+[19:09:15] envoyées=16606 codes={200: 418, 503: 420, 403: 15768} erreurs={}
+[19:09:20] envoyées=18111 codes={200: 418, 503: 420, 403: 17273} erreurs={}
+[19:09:25] envoyées=20095 codes={200: 418, 503: 420, 403: 19257} erreurs={}
+[19:09:30] envoyées=22256 codes={200: 418, 503: 420, 403: 21418} erreurs={}
+[19:09:35] envoyées=24379 codes={200: 418, 503: 420, 403: 23541} erreurs={}
+[19:09:40] envoyées=26551 codes={200: 418, 503: 420, 403: 25713} erreurs={}
+[19:09:45] envoyées=28634 codes={200: 418, 503: 420, 403: 27796} erreurs={}
+[19:09:50] envoyées=30438 codes={200: 418, 503: 420, 403: 29600} erreurs={}
+[19:09:55] envoyées=32579 codes={200: 418, 503: 420, 403: 31741} erreurs={}
+[19:10:00] envoyées=34512 codes={200: 418, 503: 420, 403: 33674} erreurs={}
+[19:10:05] envoyées=36620 codes={200: 418, 503: 420, 403: 35782} erreurs={}
+[19:10:10] envoyées=38368 codes={200: 418, 503: 420, 403: 37530} erreurs={}
+[19:10:15] envoyées=40374 codes={200: 418, 503: 420, 403: 39536} erreurs={}
+[19:10:20] fin. envoyées=42098 codes={200: 418, 503: 420, 403: 41260} erreurs={}

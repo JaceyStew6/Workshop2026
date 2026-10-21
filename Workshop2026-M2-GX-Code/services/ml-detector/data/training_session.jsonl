@@ -1,0 +1,39 @@
+{"phase": "session_start", "hours": 2.2, "seed": 7, "ts": "2026-10-20T14:44:16+00:00"}
+{"phase": "active_start", "n": 1, "minutes": 9.9, "clients_per_source": 1, "ts": "2026-10-20T14:44:16+00:00"}
+{"phase": "active_end", "n": 1, "ts": "2026-10-20T14:54:17+00:00"}
+{"phase": "idle_start", "n": 1, "minutes": 4.6, "ts": "2026-10-20T14:54:17+00:00"}
+{"phase": "idle_end", "n": 1, "ts": "2026-10-20T14:58:52+00:00"}
+{"phase": "active_start", "n": 2, "minutes": 8.3, "clients_per_source": 3, "ts": "2026-10-20T14:58:52+00:00"}
+{"phase": "active_end", "n": 2, "ts": "2026-10-20T15:07:10+00:00"}
+{"phase": "idle_start", "n": 2, "minutes": 3.4, "ts": "2026-10-20T15:07:10+00:00"}
+{"phase": "idle_end", "n": 2, "ts": "2026-10-20T15:10:33+00:00"}
+{"phase": "active_start", "n": 3, "minutes": 11.5, "clients_per_source": 3, "ts": "2026-10-20T15:10:33+00:00"}
+{"phase": "active_end", "n": 3, "ts": "2026-10-20T15:22:08+00:00"}
+{"phase": "idle_start", "n": 3, "minutes": 3.9, "ts": "2026-10-20T15:22:08+00:00"}
+{"phase": "idle_end", "n": 3, "ts": "2026-10-20T15:25:59+00:00"}
+{"phase": "active_start", "n": 4, "minutes": 8.5, "clients_per_source": 2, "ts": "2026-10-20T15:25:59+00:00"}
+{"phase": "active_end", "n": 4, "ts": "2026-10-20T15:34:32+00:00"}
+{"phase": "idle_start", "n": 4, "minutes": 3.3, "ts": "2026-10-20T15:34:32+00:00"}
+{"phase": "idle_end", "n": 4, "ts": "2026-10-20T15:37:49+00:00"}
+{"phase": "active_start", "n": 5, "minutes": 8.5, "clients_per_source": 2, "ts": "2026-10-20T15:37:49+00:00"}
+{"phase": "active_end", "n": 5, "ts": "2026-10-20T15:46:24+00:00"}
+{"phase": "idle_start", "n": 5, "minutes": 3.2, "ts": "2026-10-20T15:46:24+00:00"}
+{"phase": "idle_end", "n": 5, "ts": "2026-10-20T15:49:39+00:00"}
+{"phase": "active_start", "n": 6, "minutes": 11.4, "clients_per_source": 1, "ts": "2026-10-20T15:49:39+00:00"}
+{"phase": "active_end", "n": 6, "ts": "2026-10-20T16:01:05+00:00"}
+{"phase": "idle_start", "n": 6, "minutes": 5.5, "ts": "2026-10-20T16:01:05+00:00"}
+{"phase": "idle_end", "n": 6, "ts": "2026-10-20T16:06:37+00:00"}
+{"phase": "active_start", "n": 7, "minutes": 11.5, "clients_per_source": 1, "ts": "2026-10-20T16:06:37+00:00"}
+{"phase": "active_end", "n": 7, "ts": "2026-10-20T16:18:09+00:00"}
+{"phase": "idle_start", "n": 7, "minutes": 5.3, "ts": "2026-10-20T16:18:09+00:00"}
+{"phase": "idle_end", "n": 7, "ts": "2026-10-20T16:23:28+00:00"}
+{"phase": "active_start", "n": 8, "minutes": 10.4, "clients_per_source": 1, "ts": "2026-10-20T16:23:28+00:00"}
+{"phase": "active_end", "n": 8, "ts": "2026-10-20T16:33:55+00:00"}
+{"phase": "idle_start", "n": 8, "minutes": 3.2, "ts": "2026-10-20T16:33:55+00:00"}
+{"phase": "idle_end", "n": 8, "ts": "2026-10-20T16:37:07+00:00"}
+{"phase": "active_start", "n": 9, "minutes": 13.2, "clients_per_source": 2, "ts": "2026-10-20T16:37:07+00:00"}
+{"phase": "active_end", "n": 9, "ts": "2026-10-20T16:50:17+00:00"}
+{"phase": "idle_start", "n": 9, "minutes": 1.0, "ts": "2026-10-20T16:50:17+00:00"}
+{"phase": "idle_end", "n": 9, "ts": "2026-10-20T16:51:16+00:00"}
+{"phase": "final_idle_start", "minutes": 5, "ts": "2026-10-20T16:51:16+00:00"}
+{"phase": "session_end", "total_minutes": 132.0, "ts": "2026-10-20T16:56:16+00:00"}

@@ -1,0 +1,105 @@
+{
+  "incident_id": "inc-20261020-170833",
+  "state": "RECOVERED",
+  "target_service": "payment-api",
+  "suspected_class": "availability",
+  "anomaly_score": 0.772,
+  "detected_at": "2026-10-20T17:08:33Z",
+  "received_at": 1792516113.254588,
+  "finished_at": 1792516125.0989215,
+  "duration_s": 11.84,
+  "evidence": {
+    "req_rate_per_ip": {
+      "198.51.100.63": 50.9
+    },
+    "latency_p95_ms": 970.3,
+    "error_rate_5xx": 0.509,
+    "deviating_features": [
+      "latency_p95_ms",
+      "ratio_5xx",
+      "cpu_pct",
+      "active_conns"
+    ]
+  },
+  "steps": [
+    {
+      "ts": 1792516113.2681646,
+      "action": "BAN_IP",
+      "ok": true,
+      "detail": "WAF HTTP 201: {\"ip\":\"198.51.100.63\",\"ttl_seconds\":600}",
+      "ip": "198.51.100.63",
+      "rate": 50.9,
+      "ttl": 600
+    }
+  ],
+  "transitions": [
+    {
+      "ts": 1792516113.2545972,
+      "state": "DETECTED",
+      "why": "alerte reçue de ml-detector (score 0.772)"
+    },
+    {
+      "ts": 1792516113.2551165,
+      "state": "DECIDING",
+      "why": "classe=availability"
+    },
+    {
+      "ts": 1792516113.2553926,
+      "state": "REMEDIATING",
+      "why": "exécution du plan"
+    },
+    {
+      "ts": 1792516116.7963097,
+      "state": "VERIFYING",
+      "why": "vérification en cours : un vrai paiement test est tenté, puis on contrôle qu'aucun argent n'a été perdu ni dupliqué"
+    },
+    {
+      "ts": 1792516125.0989234,
+      "state": "RECOVERED",
+      "why": "service rétabli : le paiement test a réussi et aucun argent n'a été perdu ni dupliqué"
+    }
+  ],
+  "verification": {
+    "ts": 1792516125.0989165,
+    "ok": true,
+    "steps": [
+      {
+        "step": "quote",
+        "ok": true,
+        "ms": 21,
+        "detail": "HTTP 200"
+      },
+      {
+        "step": "login",
+        "ok": true,
+        "ms": 44,
+        "detail": "HTTP 200"
+      },
+      {
+        "step": "payment",
+        "ok": true,
+        "ms": 21,
+        "detail": "HTTP 201"
+      },
+      {
+        "step": "readback",
+        "ok": true,
+        "ms": 8,
+        "detail": "HTTP 200"
+      },
+      {
+        "step": "ledger",
+        "ok": true,
+        "ms": 17,
+        "detail": "somme des soldes = total attendu"
+      },
+      {
+        "step": "public_path",
+        "ok": true,
+        "ms": 8187,
+        "detail": "8/8 devis publics rapides sur 8 s"
+      }
+    ]
+  },
+  "restarts": 0
+}

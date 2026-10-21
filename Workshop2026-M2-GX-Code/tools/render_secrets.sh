@@ -13,6 +13,11 @@ for k, v in json.load(sys.stdin).items():
         sys.exit("nom de secret invalide")
     with open(os.path.join(".secrets", k), "w") as f:
         f.write(v)
-    os.chmod(os.path.join(".secrets", k), 0o600)
+    try:
+        os.chmod(os.path.join(".secrets", k), 0o600)
+    except PermissionError:
+        # Volume Windows monté dans WSL (/mnt/c, NTFS) : chmod refusé. Le fichier est créé quand même ;
+        # sa protection relève alors des droits NTFS. Préférer le dépôt dans le système de fichiers WSL (~/).
+        print("  (chmod 600 impossible sur ce volume : " + k + ")", file=sys.stderr)
     print("  .secrets/" + k)
 '

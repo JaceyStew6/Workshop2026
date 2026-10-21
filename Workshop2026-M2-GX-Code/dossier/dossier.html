@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>PROJECT RESILIENCE-ALPHA : dossier d'ingénierie et de gouvernance</title>
+<style>
+  @page { size: A4; margin: 16mm 16mm 20mm 16mm; }
+  :root { --ink:#0f172a; --muted:#64748b; --blue:#1d4ed8; --line:#e2e8f0; --soft:#f1f5f9; --ok:#047857; --warn:#b45309; --ko:#b91c1c; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Calibri, Arial, sans-serif; font-size: 9.6pt; line-height: 1.42; color: var(--ink); margin: 0; }
+  h1.title { font-size: 25pt; line-height: 1.1; margin: 10mm 0 2mm; letter-spacing: .2px; }
+  .sub { font-size: 12pt; color: var(--muted); margin: 0 0 6mm; }
+  h2 { font-size: 14pt; color: var(--blue); margin: 7mm 0 2.5mm; break-after: avoid; }
+  h3 { font-size: 10.5pt; margin: 4mm 0 1.5mm; break-after: avoid; }
+  p { margin: 0 0 2.4mm; text-align: left; }
+  ul { margin: 0 0 2.4mm; padding-left: 5mm; } li { margin: 0 0 1mm; }
+  table { width: 100%; border-collapse: collapse; margin: 1.5mm 0 3.5mm; font-size: 8.6pt; }
+  th, td { border: 1px solid var(--line); padding: 1.6mm 2mm; text-align: left; vertical-align: top; }
+  th { background: var(--soft); font-weight: 700; }
+  tr { break-inside: avoid; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 8.5pt; background: var(--soft); padding: 0 1mm; border-radius: 1mm; }
+  figure { margin: 2mm 0 3.5mm; break-inside: avoid; text-align: center; }
+  figure img { max-width: 100%; }
+  figcaption { font-size: 8pt; color: var(--muted); text-align: left; margin-top: 1mm; }
+  .ok { color: var(--ok); font-weight: 700; } .warn { color: var(--warn); font-weight: 700; } .ko { color: var(--ko); font-weight: 700; }
+  .box { border: 1px solid var(--line); background: #f8fafc; padding: 2.5mm 3mm; margin: 2mm 0 3.5mm; break-inside: avoid; }
+  .cover td:first-child { width: 30mm; font-weight: 600; background: #fff; }
+  .pb { break-before: page; }
+  .small { font-size: 8.2pt; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<h1 class="title">PROJECT RESILIENCE-ALPHA</h1>
+<p class="sub">Une plateforme de paiement fictive qui détecte une attaque, se défend, se répare seule, puis le prouve par une vraie transaction.</p>
+
+<table class="cover">
+<tr><td>Équipe</td><td>G? : numéro et noms à compléter</td></tr>
+<tr><td>Formation</td><td>EPSI, M2 (Bac+5), Workshop 2026</td></tr>
+<tr><td>Livrables</td><td>Ce dossier · présentation · vidéo chronométrée de 60 s · archive de code · démonstration en direct</td></tr>
+<tr><td>Périmètre</td><td>Plateforme et données entièrement fictives ; scripts d'attaque limités aux réseaux privés</td></tr>
+</table>
+
+<h2 style="margin-top:4mm">Résumé</h2>
+<p>Le scénario retenu est une <b>saturation applicative</b> : un attaquant inonde un endpoint public coûteux de l'API de paiement. Sans aucun geste humain, la chaîne suivante s'exécute : un détecteur d'anomalies (Isolation Forest) alerte, un moteur de remédiation décide parmi une liste fermée d'actions (bannir une IP, redémarrer un service autorisé), puis une <b>sonde synthétique</b> exécute une transaction réelle de bout en bout et contrôle un invariant comptable avant de déclarer le service « rétabli ». Chaque décision est tracée.</p>
+<p><b>Ce que nous avons réellement exécuté.</b> La plateforme complète (16 conteneurs) a été construite et démarrée sous Docker Desktop, déployée par le chemin officiel du sujet (secrets chiffrés SOPS + age, playbooks Ansible exécutés depuis WSL), puis attaquée trois fois de suite (300, 300 et 500 requêtes par seconde) pendant qu'un client légitime effectuait un devis et un virement chaque seconde. Les trois répétitions ont réussi : l'attaque est détectée en 12 à 17 s, l'attaquant est banni, le service est rétabli et prouvé 21 à 29 s après le début de l'attaque, <b>alors que l'attaque continue encore plus de 90 s</b>, et 100 % des virements du client légitime aboutissent ensuite. Pendant l'incident, devis et virements échouent franchement (HTTP 503) pour tous les clients, pas seulement l'attaquant : la dégradation est réelle, pas simulée.</p>
+<p><b>Ce que nous n'avons pas pu vérifier :</b> l'attaque depuis un <b>second ordinateur</b> et l'adresse IP source réellement vue par le pare-feu dans ce cas (sur un seul poste, nous avons constaté que le pare-feu ne voit que la passerelle Docker et avons simulé les identités), l'assistant opérateur avec un vrai modèle Ollama, et la vidéo de 60 s. Ces points figurent au chapitre 10 avec la procédure de vérification.</p>
+
+<table>
+<thead><tr><th>Chiffre</th><th>Valeur</th><th>Origine</th></tr></thead>
+<tr><td>Détection après le début de l'attaque</td><td>11,9 / 16,6 / 13,6 s</td><td>3 répétitions sous Docker</td></tr>
+<tr><td>Début de l'attaque → service rétabli et prouvé</td><td>21,0 / 28,5 / 25,4 s (attaque de 120 s)</td><td>idem</td></tr>
+<tr><td>Détection → service rétabli et prouvé</td><td>9,1 / 11,8 / 11,8 s</td><td>idem</td></tr>
+<tr><td>Client légitime : pire devis / pire virement</td><td>1,1 à 2,1 s / 1,6 à 2,0 s, avec erreurs 503 (≈ 20-40 ms hors incident)</td><td>idem</td></tr>
+<tr><td>Virements du client légitime réussis après la reprise</td><td>100 % (89 à 97 virements par répétition)</td><td>idem</td></tr>
+<tr><td>Score d'anomalie au repos / pendant l'attaque</td><td>0,40 à 0,58 / 0,77 (seuil : 0,70)</td><td>détecteur entraîné sur 132 min</td></tr>
+<tr><td>Tests automatisés</td><td>80 tests passent (WAF 37, moteur 19, ML 8, RAG 10, tableau de bord 6)</td><td>exécutés</td></tr>
+</table>
+
+<h2>1. Contexte, objectifs et choix de scénario</h2>
+<p>Le sujet demande une plateforme qui résiste à une attaque lancée depuis un second ordinateur et se rétablit sans intervention, en mobilisant cinq piliers : développement, infrastructure, IA et données, cybersécurité, gouvernance. Un geste humain pendant la démonstration en direct ramène l'axe « autonomie » à zéro : la conception part donc du principe que personne ne touchera à rien.</p>
+<p>Nous avons choisi la saturation applicative plutôt qu'une attaque réseau volumétrique pour trois raisons. Elle est reproductible depuis un seul poste sans équipement particulier. Elle produit un symptôme mesurable (latence, erreurs 5xx, CPU) que le ML peut apprendre. Et elle a une réponse en deux temps qui illustre bien l'autonomie : contenir la source, puis réparer seulement si nécessaire. Un scénario secondaire (injection SQL et scan) montre la différence entre <i>rétablir la disponibilité</i> et <i>contenir une tentative de compromission</i>, où la bonne réponse n'est jamais un redémarrage.</p>
+<p>Le critère de succès retenu est strict : le service n'est « rétabli » que si une transaction réelle réussit (devis, authentification, paiement entre deux comptes de test, relecture), que la <b>somme des soldes est inchangée</b> (un paiement déplace de l'argent, il n'en crée ni n'en détruit : si ce total bouge, des données sont corrompues) et que le chemin public reste rapide pendant 8 secondes consécutives. Un simple « le conteneur répond » ne suffit pas.</p>
+
+<h2>2. Architecture</h2>
+<figure><img src="figures/architecture.png" alt="Architecture"><figcaption>Figure 1 : architecture. Seul le pare-feu applicatif est exposé. Les réseaux app et ops sont internes ; le moteur de remédiation ne peut agir que par deux canaux contraints.</figcaption></figure>
+<p>Le trafic entre par un pare-feu applicatif (WAF) développé pour le projet, qui expose trois écouteurs : public (clients et attaquant), interne (sonde de vérification, jamais bannie) et administration (jeton, métriques). Les services métier (authentification, paiement) et la base ne sont joignables que par le réseau interne. L'observabilité (Prometheus, Loki, Grafana) alimente le détecteur et l'analyse d'incident ; le détecteur n'a pas d'autre pouvoir que d'envoyer une alerte au moteur, qui possède seul le droit d'agir, et le fait uniquement dans une liste fermée. Les interfaces de gestion (Grafana, tableau de bord, assistant) sont liées à 127.0.0.1 et ne sont jamais joignables depuis le PC Attaquant.</p>
+
+<h2>3. Pilier Développement</h2>
+<p><b>API de paiement et d'authentification</b> (FastAPI, PostgreSQL). Les requêtes SQL sont paramétrées (aucune concaténation), les entrées validées par Pydantic. Un paiement vérifie que le compte débité appartient à l'utilisateur authentifié (une tentative d'accès au compte d'autrui renvoie 403, testé), verrouille les lignes concernées, est idempotent (clé d'idempotence) et trace aussi les rejets. L'authentification utilise un hachage scrypt, des jetons JWT de 15 minutes, une réponse identique pour un utilisateur inconnu (pas d'énumération) et un verrouillage après 5 échecs en 5 minutes. Chaque service se connecte à la base avec un rôle SQL distinct à droits minimaux : le service de paiement ne peut pas lire la table des utilisateurs (testé).</p>
+<p><b>Un endpoint volontairement coûteux et une capacité bornée.</b> Le devis de frais (<code>/api/fees/quote</code>) est public et réalise un calcul de scoring de risque (PBKDF2) puis une lecture en base. La capacité du service de paiement est bornée : 0,5 CPU, pool de 3 connexions à la base, attente maximale de 0,4 s pour en obtenir une. Ce réglage a été trouvé en mesurant : avec un pool plus large, le service ralentissait sous attaque mais <i>répondait toujours</i> (devis et virements réussissaient, simplement plus lentement), donc l'incident n'était pas démontrable. Avec ces valeurs, devis et virements échouent franchement (HTTP 503) pour tous les clients tant que la source n'est pas bannie, puis redeviennent immédiatement normaux.</p>
+<p><b>Portail et tableau de bord</b> (React 18, Tailwind 3, Vite). Le portail permet de se connecter et d'effectuer un paiement ; le tableau de bord interroge le moteur toutes les secondes et montre l'état perçu par un client, la latence avant, pendant et après l'incident, la chronologie des décisions et les cinq étapes de la vérification transactionnelle. L'état est porté par un texte et une couleur, pas par la couleur seule. Il a été construit, testé (6 tests) et contrôlé visuellement sur les données réelles du moteur. La politique de sécurité du contenu est stricte (aucun script en ligne).</p>
+
+<h2>4. Pilier Infrastructure</h2>
+<p><b>Conteneurs et segmentation.</b> La composition définit 16 services sur quatre réseaux (<code>edge</code>, <code>app</code>, <code>ops</code>, <code>mgmt</code>), dont deux internes sans accès sortant ; le sous-réseau <code>edge</code> est fixé. Les conteneurs tournent sans privilèges (utilisateur non root, <code>cap_drop: ALL</code>, système de fichiers en lecture seule, limites de ressources) et disposent de sondes de santé. Elle a été <b>construite et démarrée sous Docker Desktop</b> : 16 services sains, test de fumée métier réussi.</p>
+<p><b>Accès à Docker.</b> Le moteur de remédiation n'a jamais le socket Docker : il passe par un proxy filtré qui n'autorise que les opérations de lecture et le redémarrage, et il vérifie en plus qu'un conteneur porte l'étiquette <code>resilience.remediable=true</code> avant tout redémarrage. Un budget limite à 3 redémarrages par fenêtre de 5 minutes. Limite connue : le proxy autorise aussi l'arrêt et l'extinction forcée ; la restriction repose sur le moteur, pas sur le proxy (risque résiduel R4). Un second proxy, en lecture seule, sert Promtail pour la collecte des journaux.</p>
+<p><b>Secrets.</b> Les secrets sont générés aléatoirement, chiffrés avec SOPS et age, déchiffrés dans un dossier ignoré par git et montés comme secrets Docker (fichiers, jamais variables d'environnement). Le cycle complet a été <b>exécuté sur le poste</b> : génération, chiffrement, déchiffrement par le playbook de déploiement, démarrage avec ces secrets ; aucune clé privée dans le dépôt. La clé privée age doit être sauvegardée hors dépôt (sans elle, les secrets sont irrécupérables).</p>
+<p><b>Automatisation (Ansible).</b> Quatre playbooks, <b>tous exécutés</b> depuis Ubuntu 24.04 sous WSL : déploiement (déchiffrement des secrets, construction, démarrage avec attente de santé, test de fumée : 7 tâches sur 7 réussies), sauvegarde de la base, restauration (19 s, test de fumée compris) et remise à zéro de la démonstration (12 s). Rôle des outils : Docker Compose <i>décrit et exécute</i> les conteneurs ; Ansible <i>orchestre et vérifie</i> (prérequis, secrets, construction, démarrage, preuve de santé) ; SOPS protège les secrets.</p>
+<p><b>Observabilité.</b> Prometheus collecte les services, Grafana affiche dix panneaux (service perçu, score d'anomalie, bans, débit, latence, erreurs, CPU, incidents, durée de reprise, journaux), Loki centralise les journaux : un événement d'audit y apparaît en moins de 15 s (vérifié). Deux écarts constatés et traités : le proxy de lecture bloquait l'appel dont Promtail a besoin (Loki restait vide, corrigé en autorisant cet appel en lecture seule) ; sous Docker Desktop, cAdvisor ne voit que l'hôte et jamais les conteneurs individuels, d'où l'usage des métriques de processus exposées par le service de paiement. Le dépôt documente l'installation et la relance (README, deux chemins : démarrage rapide PowerShell et déploiement officiel sous WSL). Sur un réseau qui intercepte TLS, la vérification des certificats au build peut être désactivée par deux variables explicites ; elle reste active par défaut.</p>
+
+<h2>5. Pilier IA et Données</h2>
+<p><b>Détecteur d'anomalies (Isolation Forest).</b> Sept mesures lues dans Prometheus toutes les 5 secondes : débit total, débit maximal d'une IP, latence p95 (fenêtre de 60 s), proportions de 4xx et 5xx, CPU du service de paiement, connexions actives. Les mesures asymétriques passent en logarithme. Le score est normalisé de sorte que 0,70 soit le seuil, fixé au quantile 99,9 % d'un jeu de validation de trafic normal. Pour éviter les fausses alertes, l'alerte n'est émise que si 3 échantillons sur 4 dépassent le seuil, et un seul incident est ouvert par épisode. Une métrique absente fait ignorer l'échantillon au lieu de la remplacer par zéro (ce qui fabriquerait de l'anormal). La qualification « disponibilité », « compromission » ou « inconnue » est une heuristique sur les mesures qui dépassent leur norme ; la classe « inconnue » ne déclenche <b>aucune</b> action automatique.</p>
+<p><b>Données d'entraînement.</b> Une session de 132 minutes génère du trafic légitime réaliste : 9 phases actives de 8 à 14 min d'intensité variable (1 à 3 clients par source, avec des rafales légitimes) alternées avec 9 phases d'inactivité réelle (3 à 7 min), soit 1 609 échantillons dont 29 % au calme. Le détecteur est arrêté pendant la collecte. Les données sont découpées en blocs alternés (7 blocs sur 10 pour l'entraînement, 3 pour fixer le seuil).</p>
+<table>
+<thead><tr><th>Mesure</th><th>Résultat</th></tr></thead>
+<tr><td>Score sur les données normales (seuil 0,70)</td><td>moyenne 0,45 ; 0,44 % des échantillons au-dessus du seuil (un incident exige 3 sur 4 consécutifs)</td></tr>
+<tr><td>Score au repos, 5 minutes en direct</td><td>entre 0,40 et 0,58 ; aucun des 58 échantillons au-dessus du seuil</td></tr>
+<tr><td>Trois attaques réelles (300, 300, 500 req/s)</td><td>score 0,77 à chaque fois, classe « disponibilité », détection en 12 à 17 s</td></tr>
+</table>
+<p><b>Ce que les données réelles nous ont appris</b> (détail au chapitre 9) : cinq défauts, tous invisibles avec le simulateur, ont été trouvés et corrigés. Une variable à variation quasi nulle (mémoire du processus) a suffi, par un seul relevé à son maximum, à gonfler le seuil au point qu'une attaque réelle (7 variables sur 8 largement hors norme) scorait <i>moins</i> qu'un repos : elle a été retirée. Un découpage entraînement/validation « début/fin » plaçait toute la période de calme dans la validation : le modèle n'apprenait jamais que le repos est normal. Un faux incident survenu pendant la collecte a banni le générateur de trafic lui-même et contaminé 10 % d'un jeu d'entraînement : l'entraînement rejette désormais les lignes à taux d'erreur anormal.</p>
+<p><b>Limites.</b> 132 minutes restent proches du minimum raisonnable ; un redémarrage du PC a déjà suffi à déplacer la ligne de base : le modèle doit être réentraîné après tout changement de l'hôte ou de la plateforme (procédure et score de repos attendu documentés). Une attaque lente et discrète, sans dégradation visible, n'est pas détectée par ces mesures.</p>
+<p><b>Assistant opérateur (RAG local).</b> LangChain et Ollama (modèle de 7 à 8 milliards de paramètres, embeddings dédiés) répondent aux questions des opérateurs à partir de la documentation de l'équipe, avec les sources citées. Conception défensive : aucun outil et aucun agent (la chaîne est recherche, prompt, texte), aucun accès réseau vers le moteur de remédiation, aucun secret, et les documents sont traités comme des données (le prompt interdit d'obéir aux instructions qu'ils contiennent : injection de prompt indirecte). Si rien de pertinent n'est retrouvé, il le dit. Les 10 tests passent avec un faux modèle ; <b>le modèle Ollama réel n'a pas été exécuté</b> et le seuil de pertinence des embeddings n'est pas calibré.</p>
+
+<h2>6. Pilier Cybersécurité</h2>
+<p><b>Pare-feu applicatif.</b> Règles de type « CRS-lite » à score d'anomalie (blocage dès 5) : injection SQL, XSS, traversée de chemin, exécution de commande, scanners connus. 37 tests passent, dont 17 attaques bloquées et 8 requêtes légitimes laissées passer. Il refuse les corps trop gros (413) et la méthode TRACE (405), masque l'en-tête serveur et ne journalise jamais ni corps de requête ni en-tête d'authentification. Le bannissement est par adresse unique, avec durée de vie, plafond, persistance et garde-fou anti-verrouillage (l'adresse du PC Hôte et le bouclage local ne sont jamais bannis). Le WAF ne bloque volontairement pas sur le débit : c'est la chaîne ML qui décide, ce qui évite de bannir un client légitime.</p>
+<p><b>SIEM.</b> Six règles d'alerte Prometheus (force brute d'authentification, blocages par signature, source bannie, service dégradé, escalade, composant arrêté), étiquetées MITRE ATT&amp;CK, validées avec l'outil officiel promtool lors des essais sur banc natif. Journaux JSON centralisés dans Loki, interrogeables dans Grafana (par exemple les requêtes refusées pour ban ou les bannissements décidés). Alertmanager n'a pas été exécuté.</p>
+<p><b>Équipe rouge.</b> Deux scénarios scriptés avec garde-fous : refus de toute cible hors réseau privé (le bouclage local exige un indicateur explicite), acte explicite requis, durée et débit plafonnés, aucune charge utile malveillante réelle (testés). Un script de répétition rejoue l'attaque, un client légitime et la lecture de l'incident, puis rend un verdict automatique sur cinq critères (chapitre 9).</p>
+
+<h2>7. Le moteur de remédiation : règles de décision</h2>
+<p>Le moteur est le composant le plus sensible : il a le pouvoir d'agir. Sa conception repose donc sur des règles courtes, testables (19 tests) et fermées. Chaque incident suit une machine d'états : DETECTED → DECIDING → REMEDIATING → VERIFYING, puis l'une de trois issues : RECOVERED (service rétabli et prouvé), CONTAINED (compromission contenue, humain requis) ou ESCALATED (le moteur n'a pas pu conclure, humain requis).</p>
+<table>
+<thead><tr><th>Situation</th><th>Décision du moteur</th><th>Pourquoi</th></tr></thead>
+<tr><td>Classe « disponibilité », une ou plusieurs sources à ≥ 30 req/s</td><td>Bannir ces sources (3 au maximum, jamais l'IP de l'hôte), attendre le retour d'un service sain</td><td>Contenir la cause avant de toucher au service</td></tr>
+<tr><td>Service encore dégradé après le bannissement</td><td>Redémarrer UNE fois le service autorisé et étiqueté, attendre qu'il soit sain</td><td>Un redémarrage n'est qu'un dernier recours</td></tr>
+<tr><td>Aucune source à bannir (débit faible, ou source protégée)</td><td>Passer directement à l'évaluation de santé, puis au redémarrage si nécessaire</td><td>L'attaque peut être distribuée ou masquée</td></tr>
+<tr><td>Classe « compromission »</td><td>Bannir, vérifier la disponibilité, conclure CONTAINED ; jamais de redémarrage</td><td>Préserver les preuves, ne pas relancer un composant possiblement piégé</td></tr>
+<tr><td>Classe « inconnue »</td><td>Aucune action automatique, ESCALATED</td><td>Une anomalie sans signature ne justifie pas d'agir seul</td></tr>
+<tr><td>Vérification qui n'aboutit pas dans le délai</td><td>ESCALATED (après un éventuel dernier redémarrage s'il n'y en a pas eu)</td><td>Ne jamais affirmer un rétablissement non prouvé</td></tr>
+<tr><td>Plus de 3 redémarrages en 5 minutes</td><td>Refus (budget épuisé)</td><td>Éviter une boucle de redémarrage qui aggrave l'incident</td></tr>
+</table>
+<p>Les entrées sont validées strictement : une cible hors de la liste autorisée, un identifiant mal formé ou une classe hors énumération sont rejetés. Les seules actions possibles sont BAN_IP et RESTART_SERVICE ; il n'existe aucune action « exécuter une commande ». Les données qui viennent du détecteur (adresses, éléments de preuve) sont traitées comme non fiables et bornées en taille. Les messages affichés au jury sont rédigés pour un non-spécialiste (« un vrai paiement test est tenté, puis on contrôle qu'aucun argent n'a été perdu ni dupliqué »).</p>
+
+<h2>8. Pilier Gouvernance</h2>
+<p><b>EBIOS Risk Manager.</b> Dix risques cotés en gravité et vraisemblance, des mesures reliées à des preuves vérifiables dans le dépôt, puis un risque résiduel. Le plus important est celui que la plateforme introduit elle-même en se défendant : un moteur capable de redémarrer des conteneurs est une cible de choix. C'est pourquoi c'est le composant le plus contraint du projet (liste fermée d'actions, cibles autorisées, étiquette obligatoire, budget de redémarrages, réseau interne, jeton).</p>
+<table>
+<thead><tr><th>Risque</th><th>Initial</th><th>Résiduel</th><th>Commentaire</th></tr></thead>
+<tr><td>Saturation applicative</td><td>16 critique</td><td>6 moyen</td><td>Prouvé par 3 répétitions ; reste exposé à une attaque distribuée sous 30 req/s par source</td></tr>
+<tr><td>Injection</td><td>12 critique</td><td>4 moyen</td><td>WAF = sous-ensemble de règles, pas de CRS complet</td></tr>
+<tr><td>Détournement du moteur</td><td>8 élevé</td><td>4 moyen</td><td>Le proxy Docker permet aussi arrêt et extinction forcée</td></tr>
+<tr><td>Faux positif du ML</td><td>9 élevé</td><td>4 moyen</td><td><b>Réalisé pendant la mise au point</b> : un modèle sous-entraîné a fait bannir toute la passerelle pendant 10 min ; corrigé, bornes conservées</td></tr>
+<tr><td>Usurpation / masquage de l'IP source</td><td>9 élevé</td><td>6 moyen</td><td><b>Constaté</b> sur un seul poste (le WAF ne voit que la passerelle) ; à vérifier avec un second PC</td></tr>
+<tr><td>Chaîne d'approvisionnement</td><td>8 élevé</td><td>8 élevé</td><td>Non traité : aucun scan d'images</td></tr>
+<tr><td>Interception du trafic en clair</td><td>6 moyen</td><td>6 moyen</td><td>Écart assumé : pas de TLS</td></tr>
+</table>
+<p><b>PCA / PRA.</b> Objectifs, scénarios (saturation, service planté, compromission, base corrompue, perte de l'hôte, perte de la clé de chiffrement), ordre de reconstruction et faiblesses assumées. Mesuré sous Docker : reprise sur saturation en 9 à 12 s après la détection, sauvegarde de la base, restauration en 19 s, remise à zéro de la démonstration en 12 s. Faiblesses : sauvegardes sur le même hôte, non chiffrées, non planifiées, restauration rejouée sur une base de démonstration et non sur une base corrompue. Règle de conception : une compromission suspectée est contenue mais jamais redémarrée, car un redémarrage détruirait les preuves.</p>
+<p><b>NIS2 et DORA.</b> Une cartographie exigence par exigence (couvert, partiel, écart) avec preuve et écart pour chacune. Nous ne prétendons à aucune conformité. Le prototype démontre surtout deux exigences : détecter et contenir automatiquement, et prouver la reprise avec une traçabilité complète. Il laisse volontairement aux humains ce qui engage la responsabilité : décider d'une notification, accepter un risque, escalader une compromission.</p>
+
+<h2>9. Résultats d'exécution</h2>
+<p><b>Trois répétitions sous Docker.</b> Chaque répétition lance l'attaque pendant 120 s, joue en parallèle un client légitime (devis + virement chaque seconde) et lit l'incident côté moteur, sans intervention. Le verdict automatique exige cinq critères : incident RECOVERED, IP bannie = celle de l'attaquant (jamais la passerelle), reprise <b>pendant</b> que l'attaque continue, au moins 95 % de virements réussis après la reprise, dégradation réellement observée avant (tableau ci-dessous et figure 2).</p>
+<table>
+<thead><tr><th>N°</th><th>Attaque</th><th class="num">Détection</th><th class="num">Reprise</th><th class="num">Détection → reprise</th><th>Pire devis / virement</th><th>Virements OK après</th><th>Verdict</th></tr></thead>
+<tr><td>1</td><td>300 req/s</td><td class="num">11,9 s</td><td class="num">21,0 s</td><td class="num">9,1 s</td><td>1,06 / 1,58 s</td><td>100 %</td><td class="ok">RÉUSSI</td></tr>
+<tr><td>2</td><td>300 req/s</td><td class="num">16,6 s</td><td class="num">28,5 s</td><td class="num">11,8 s</td><td>1,73 / 1,99 s</td><td>100 %</td><td class="ok">RÉUSSI</td></tr>
+<tr><td>3</td><td>500 req/s</td><td class="num">13,6 s</td><td class="num">25,4 s</td><td class="num">11,8 s</td><td>2,10 / 1,90 s</td><td>100 %</td><td class="ok">RÉUSSI</td></tr>
+</table>
+<p class="small"><b>Ce que ces essais ne prouvent pas.</b> L'attaquant est simulé sur la même machine que la plateforme, par l'en-tête <code>X-Forwarded-For</code>. Ils démontrent la chaîne détection → décision → reprise → preuve par transaction, pas la capture de la vraie adresse IP d'un second PC.</p>
+<p><b>Le cas défavorable</b> (banc natif antérieur). Si l'attaquant est impossible à bannir (par exemple parce que son adresse est masquée), le moteur constate que le service reste dégradé, redémarre le service de paiement une fois, observe quelques secondes de répit, puis l'attaque reprend (figure 3). La vérification de stabilité de 8 secondes échoue (0/8) et l'incident se termine par ESCALATED après 49 s : un humain doit agir. C'est la bonne issue, mais ce n'était pas le comportement initial.</p>
+<p><b>Scénario injection.</b> 37 requêtes malveillantes (injection SQL, traversée, XSS, User-Agent de scanner) : 37 refus 403 par le WAF, aucune ne parvient à l'API, pas d'incident ML (score 0,55 pour un seuil de 0,70), ce qui est attendu : ce scénario relève du WAF et de l'alerte SIEM, et son issue correcte est le confinement, pas un redémarrage (banc natif ; à rejouer sous Docker).</p>
+<figure><img src="figures/docker-repetitions.png" alt="Latence perçue par le client légitime"><figcaption>Figure 2 : latence perçue par le client légitime pendant les trois répétitions. Vert : réussi et rapide ; orange : réussi mais lent ; rouge : échec (503). La reprise a lieu entre 21 et 29 s, l'attaque se poursuit jusqu'à 120 s (ligne pointillée) et le service reste normal.</figcaption></figure>
+<figure><img src="figures/natif-attaquant-cache.png" alt="Source impossible à bannir" style="max-width:88%"><figcaption>Figure 3 : flood depuis une source impossible à bannir (banc natif). Après le redémarrage, le service retombe ; le moteur n'affirme pas « rétabli » et escalade.</figcaption></figure>
+<h3 style="break-before: auto">Défauts trouvés pendant l'exécution, puis corrigés</h3>
+<p style="break-after: avoid">Ces essais ont plus de valeur par ce qu'ils ont révélé que par leurs chiffres :</p>
+<table>
+<thead><tr><th>Défaut observé</th><th>Conséquence</th><th>Correction</th></tr></thead>
+<tr><td>Le moteur déclarait « rétabli » après un répit de quelques secondes sous attaque continue</td><td>Fausse assurance : le service retombait aussitôt (33 mesures dégradées)</td><td>Observation continue du chemin public pendant 8 s ; sinon escalade</td></tr>
+<tr><td>Séries d'erreurs 4xx/5xx absentes tant qu'il n'y a pas d'erreur</td><td>Détecteur aveugle (valeurs manquantes)</td><td>Valeur zéro explicite dans les requêtes</td></tr>
+<tr><td>Compteurs de blocage et d'échec de connexion créés au premier événement</td><td><code>increase()</code> et <code>rate()</code> ignorent la première valeur : la première rafale d'une instance neuve échappait aux alertes</td><td>Séries créées à zéro au démarrage</td></tr>
+<tr><td>Service ralenti mais toujours disponible sous attaque (pool large)</td><td>Devis et virements réussissaient : aucun incident démontrable</td><td>Pool de 3 connexions, attente de 0,4 s : échecs 503 francs</td></tr>
+<tr><td>Variable mémoire quasi constante en fonctionnement normal</td><td>Un seul relevé au maximum a gonflé le seuil : une attaque réelle scorait moins qu'un repos</td><td>Variable retirée du modèle</td></tr>
+<tr><td>Découpage entraînement/validation en début/fin</td><td>Période de calme jamais apprise : repos presque aussi « anormal » qu'une attaque, détecteur qui ne se réarme pas</td><td>Découpage en blocs alternés, session de collecte avec phases d'inactivité</td></tr>
+<tr><td>Faux incident pendant la collecte de trafic « normal »</td><td>La passerelle Docker a été bannie 10 min ; 10 % du jeu d'entraînement contaminés</td><td>Détecteur arrêté pendant la collecte ; rejet automatique des lignes à erreurs &gt; 30 %</td></tr>
+<tr><td>Latence p95 sur 30 s trop bruitée au repos</td><td>Dépassements de seuil sans cause</td><td>Fenêtre portée à 60 s</td></tr>
+<tr><td>Loki vide</td><td>Journaux non centralisés (le proxy Docker en lecture répondait 403)</td><td>Appel autorisé en lecture seule ; ingestion vérifiée en direct</td></tr>
+<tr><td>Disque Windows monté dans WSL : droits Unix refusés</td><td>Déchiffrement des secrets et sauvegarde en échec</td><td>Option de montage <code>metadata</code>, utilisateur dédié, script tolérant</td></tr>
+</table>
+
+<h2>10. Limites, écarts et vérifications restantes</h2>
+<p>Nous préférons lister ce qui n'a pas été prouvé plutôt que le laisser deviner au jury.</p>
+<table>
+<thead><tr><th>Élément</th><th>Statut</th><th>Que faire</th></tr></thead>
+<tr><td>Attaque depuis un second PC, IP source vue par le WAF</td><td class="ko">Non vérifié : risque principal</td><td>Lancer l'attaque depuis le PC Attaquant via le point d'accès sans fil, lire <code>client_ip</code> dans les journaux du WAF, laisser <code>TRUSTED_PROXIES</code> vide ; sinon placer un proxy natif</td></tr>
+<tr><td>Composition Docker, Ansible, secrets SOPS + age</td><td class="ok">Exécutés (16 services sains)</td><td>Rejouer sur le PC Hôte final</td></tr>
+<tr><td>Prometheus, Grafana, Loki, Promtail, proxys Docker</td><td class="ok">Vérifiés</td><td>Alertmanager non exécuté ; cAdvisor ne voit que l'hôte (métriques de processus utilisées)</td></tr>
+<tr><td>RAG avec le modèle Ollama réel</td><td class="warn">Non exécuté</td><td>Installer Ollama, calibrer le seuil de pertinence avec 5 questions du domaine et 5 hors domaine</td></tr>
+<tr><td>Modèle ML sur la pile réelle</td><td class="ok">Entraîné (132 min)</td><td>Réentraîner après tout changement de l'hôte ; viser ≥ 2 h</td></tr>
+<tr><td>Chiffrement du transport (TLS), MFA, scan d'images</td><td>Écarts assumés</td><td>Premiers sujets d'une feuille de route</td></tr>
+<tr><td>Vidéo chronométrée de 60 s sans coupure</td><td class="warn">Non produite</td><td>À filmer lors d'une exécution réelle depuis le PC Attaquant</td></tr>
+</table>
+<p><b>Détail du détecteur.</b> La détection arrive 12 à 17 s après le début : la fenêtre de 3 échantillons sur 4 avec un tick de 5 s en est la cause principale. Réduire ce délai augmente le risque de faux positifs ; c'est l'arbitrage principal à présenter. Une attaque lente et discrète, sans dégradation visible, n'est pas détectée. La qualification « disponibilité » ou « compromission » est une heuristique, pas une prédiction du modèle.</p>
+<p><b>Feuille de route.</b> TLS interne et MFA ; remplacement du WAF par ModSecurity ou Coraza avec jeu de règles complet ; limitation de débit globale et protection anti-DDoS en amont ; scan et signature des images ; orchestrateur à droits fins à la place du proxy Docker ; sauvegardes chiffrées hors hôte ; mode « suggestion » du ML avant l'automatisation complète.</p>
+
+<h2>11. Déroulé de la démonstration en direct</h2>
+<p>La démonstration doit se faire sans aucun geste humain entre le lancement de l'attaque et le retour à la normale : toute intervention fait passer l'axe d'autonomie à « non démontré ». Le déroulé est donc entièrement scripté et répété.</p>
+<table>
+<thead><tr><th>Étape</th><th>Action</th><th>Ce que le jury voit</th></tr></thead>
+<tr><td>1</td><td>Ouvrir le tableau de bord</td><td>État « OPÉRATIONNEL », latence de référence (≈ 20-40 ms)</td></tr>
+<tr><td>2</td><td>PC Attaquant : lancer le flood (300 req/s, 120 s, cible privée, acte explicite requis)</td><td>Le service passe en dégradé, devis et virements échouent (503)</td></tr>
+<tr><td>3</td><td>Ne rien toucher</td><td>Alerte du détecteur (≈ 12-17 s), décision, bannissement de l'IP, retour à des latences normales (≈ 21-29 s) alors que l'attaque continue</td></tr>
+<tr><td>4</td><td>Lire la chronologie et la vérification</td><td>Cinq étapes réussies : devis, connexion, paiement, relecture, grand livre ; puis 8 s de stabilité</td></tr>
+<tr><td>5</td><td>Répéter une transaction depuis le portail</td><td>Un paiement réel aboutit alors que l'attaque se poursuit (l'attaquant est refusé)</td></tr>
+<tr><td>6</td><td>Montrer l'audit et les alertes</td><td>Journal d'audit du moteur, journaux dans Grafana/Loki, assistant opérateur citant la procédure</td></tr>
+</table>
+<p><b>Plan de vérification avant la démonstration</b> (sur le PC Hôte final, dans cet ordre) : démarrer la composition et vérifier que tous les conteneurs sont sains ; confirmer que le WAF voit l'adresse réelle du PC Attaquant (<code>TRUSTED_PROXIES</code> vide) ; réentraîner le détecteur si le score au repos n'est pas entre 0,40 et 0,58 ; rejouer l'attaque trois fois depuis le PC Attaquant avec le script de répétition (option sans attaque locale) en notant détection et reprise ; tester la sauvegarde et la restauration ; installer Ollama et calibrer l'assistant ; filmer la vidéo de 60 secondes sur une exécution réelle.</p>
+
+<h2>12. Annexe : correspondance avec les cinq piliers et contributions</h2>
+<table>
+<thead><tr><th>Pilier</th><th>Technologies mises en œuvre</th><th>Preuve vérifiable dans l'archive</th></tr></thead>
+<tr><td>Développement</td><td>FastAPI, PostgreSQL, React 18, Tailwind 3, Vite</td><td>Tests du tableau de bord (6) ; test de fumée métier ; contrôles d'accès testés (403, rôle SQL, verrouillage 429)</td></tr>
+<tr><td>Infrastructure</td><td>Docker Compose (4 réseaux, 16 services), docker-socket-proxy, Ansible, SOPS + age, Prometheus, Loki, Grafana</td><td>Déploiement Ansible exécuté (7/7), sauvegarde, restauration, remise à zéro ; secrets chiffrés ; scanner de secrets ; ingestion Loki vérifiée</td></tr>
+<tr><td>IA et Données</td><td>scikit-learn (Isolation Forest), LangChain, Ollama</td><td>8 tests du détecteur, 10 du RAG ; session d'entraînement de 132 min ; 3 répétitions réelles (<code>tests/rehearsals/</code>) ; Ollama NON exécuté</td></tr>
+<tr><td>Cybersécurité</td><td>WAF applicatif, règles Prometheus (SIEM), Loki, scénarios d'équipe rouge, SOPS</td><td>37 tests WAF ; règles validées par promtool (banc natif) ; attaque d'injection bloquée à 100 % (37/37, banc natif)</td></tr>
+<tr><td>Gouvernance</td><td>EBIOS Risk Manager, PCA/PRA, cartographie NIS2 et DORA</td><td>Dossier <code>governance/</code> relié aux mesures et aux preuves, écarts assumés listés</td></tr>
+</table>
+<p><b>Contribution de chacun</b> (à compléter avec les noms de l'équipe : le sujet exige qu'elle soit visible).</p>
+<table>
+<thead><tr><th>Domaine</th><th>Réalisations principales</th><th>Membre(s)</th></tr></thead>
+<tr><td>Développement</td><td>API de paiement et d'authentification, portail, tableau de bord, moteur de remédiation</td><td style="white-space:nowrap">à compléter</td></tr>
+<tr><td>Infrastructure</td><td>Composition Docker, playbooks Ansible, secrets SOPS + age, observabilité (Prometheus, Loki, Grafana)</td><td style="white-space:nowrap">à compléter</td></tr>
+<tr><td>IA et Données</td><td>Détecteur d'anomalies, session d'entraînement, assistant RAG</td><td style="white-space:nowrap">à compléter</td></tr>
+<tr><td>Cybersécurité</td><td>Pare-feu applicatif, règles SIEM, scripts d'attaque et de répétition</td><td style="white-space:nowrap">à compléter</td></tr>
+<tr><td>Gouvernance</td><td>EBIOS RM, PCA/PRA, cartographie NIS2 et DORA, dossier et présentation</td><td style="white-space:nowrap">à compléter</td></tr>
+</table>
+<p class="small">Les tests s'exécutent avec les commandes listées dans le fichier README.md de l'archive ; les résultats d'exécution de bout en bout (JSON, chronologies, journaux d'attaque, graphiques) sont dans <code>tests/rehearsals/</code> (Docker) et <code>tests/e2e/results/</code> (banc natif antérieur).</p>
+
+</body>
+</html>

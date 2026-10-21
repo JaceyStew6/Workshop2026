@@ -49,7 +49,10 @@ services:
   # ---------------------------------------------------------------- EDGE
   waf:
     <<: *hardened
-    build: ./services/waf
+    build:
+      context: ./services/waf
+      args:
+        PIP_EXTRA_ARGS: ${PIP_EXTRA_ARGS:-}
     ports:
       - "${HOST_IP:-0.0.0.0}:80:8080"        # seul point d'entrée du trafic (utilisateurs + attaquant)
     networks: [edge, app, ops]               # ops : écouteurs 8081 (sonde) et 8082 (admin + /metrics)
@@ -89,7 +92,10 @@ services:
 
   auth-service:
     <<: *hardened
-    build: ./services/auth-service
+    build:
+      context: ./services/auth-service
+      args:
+        PIP_EXTRA_ARGS: ${PIP_EXTRA_ARGS:-}
     networks: [app]
     secrets: [db_password, jwt_secret, demo_password, probe_password]
     environment:
@@ -113,7 +119,10 @@ services:
 
   payment-api:
     <<: *hardened
-    build: ./services/payment-api
+    build:
+      context: ./services/payment-api
+      args:
+        PIP_EXTRA_ARGS: ${PIP_EXTRA_ARGS:-}
     networks: [app]
     secrets: [db_password, jwt_secret]
     environment:
@@ -230,7 +239,10 @@ services:
 
   ml-detector:
     <<: *hardened
-    build: ./services/ml-detector
+    build:
+      context: ./services/ml-detector
+      args:
+        PIP_EXTRA_ARGS: ${PIP_EXTRA_ARGS:-}
     networks: [ops]
     secrets: [remediation_token]
     environment:
@@ -248,7 +260,10 @@ services:
 
   remediation-engine:
     <<: *hardened
-    build: ./services/remediation-engine
+    build:
+      context: ./services/remediation-engine
+      args:
+        PIP_EXTRA_ARGS: ${PIP_EXTRA_ARGS:-}
     networks: [ops]
     secrets: [remediation_token, waf_admin_token, probe_password]
     environment:
@@ -300,13 +315,19 @@ services:
     <<: *hardened
     image: tecnativa/docker-socket-proxy:0.2.0
     networks: [ops]
-    environment: { CONTAINERS: "1", POST: "0", EXEC: "0", IMAGES: "0", NETWORKS: "0", VOLUMES: "0" }
+    # NETWORKS=1 : Promtail interroge GET /networks pour calculer les étiquettes des conteneurs ; sans
+    # cela le proxy répond 403 et Loki ne reçoit aucun journal (vérifié). Lecture seule : POST=0 interdit
+    # toute création, modification ou suppression.
+    environment: { CONTAINERS: "1", POST: "0", EXEC: "0", IMAGES: "0", NETWORKS: "1", VOLUMES: "0" }
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
   dashboard:
     <<: *hardened
-    build: ./services/dashboard      # React + Tailwind : timeline d'incident, état avant/pendant/après
+    build:
+      context: ./services/dashboard
+      args:
+        NPM_STRICT_SSL: ${NPM_STRICT_SSL:-true}      # React + Tailwind : timeline d'incident, état avant/pendant/après
     networks: [ops, mgmt]
     ports:
       - "127.0.0.1:8088:8080"        # PC Hôte uniquement
@@ -317,7 +338,10 @@ services:
 
   rag-assistant:
     <<: *hardened
-    build: ./services/rag-assistant  # LangChain + index vectoriel en mémoire ; documents en lecture seule
+    build:
+      context: ./services/rag-assistant
+      args:
+        PIP_EXTRA_ARGS: ${PIP_EXTRA_ARGS:-}  # LangChain + index vectoriel en mémoire ; documents en lecture seule
     networks: [mgmt]                 # volontairement absent du réseau ops : aucun chemin vers le moteur
     ports:
       - "127.0.0.1:8090:8000"

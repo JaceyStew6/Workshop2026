@@ -1,5 +1,8 @@
 # Résultats d'exécution de bout en bout (banc d'essai NATIF)
 
+> **Résultats plus récents, sous Docker** (détecteur entraîné sur 132 min, 3 répétitions réussies, 300 à 500 req/s) : voir `tests/rehearsals/README.md`. Le présent document décrit le banc d'essai NATIF antérieur (sans Docker) ; ses chiffres de détection (≈ 26 s) correspondent à un ancien modèle entraîné sur 20 min.
+
+
 **Ce que ces résultats prouvent, et ce qu'ils ne prouvent pas.** Ils ont été produits dans un environnement de travail SANS Docker : les mêmes services Python (auth, paiement, WAF), la même base PostgreSQL, le même moteur de remédiation et le même détecteur ont tourné comme **processus natifs** sur une seule machine ; seul le contrôleur de redémarrage est remplacé (`tests/e2e/run_remediation.py` relance un processus au lieu d'appeler Docker). L'« attaquant » est une adresse locale (192.168.137.20) sur la même machine, qui partage donc le processeur avec la plateforme. Ils ne remplacent PAS un essai sur le PC Hôte avec Docker Desktop et un vrai PC Attaquant : ils démontrent la **logique** et la **chaîne complète**, pas les performances de la configuration finale.
 
 ## Scénario 1 : saturation applicative (`flood-1`, `flood-2`, `flood-3`)

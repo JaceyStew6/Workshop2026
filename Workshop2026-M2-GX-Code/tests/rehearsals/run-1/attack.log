@@ -1,0 +1,27 @@
+cible validée : 127.0.0.1
+[19:02:36] ATTAQUE démarrée : 300 req/s pendant 120s vers http://127.0.0.1 (identité simulée pour le WAF : 198.51.100.61)
+[19:02:41] envoyées=403 codes={200: 234, 503: 169} erreurs={}
+[19:02:46] envoyées=818 codes={200: 463, 503: 355} erreurs={}
+[19:02:51] envoyées=1680 codes={200: 584, 503: 438, 403: 658} erreurs={}
+[19:02:56] envoyées=3038 codes={200: 584, 503: 438, 403: 2016} erreurs={}
+[19:03:01] envoyées=4478 codes={200: 584, 503: 438, 403: 3456} erreurs={}
+[19:03:06] envoyées=5984 codes={200: 584, 503: 438, 403: 4962} erreurs={}
+[19:03:11] envoyées=7438 codes={200: 584, 503: 438, 403: 6416} erreurs={}
+[19:03:16] envoyées=8878 codes={200: 584, 503: 438, 403: 7856} erreurs={}
+[19:03:21] envoyées=10140 codes={200: 584, 503: 438, 403: 9118} erreurs={}
+[19:03:26] envoyées=11446 codes={200: 584, 503: 438, 403: 10424} erreurs={}
+[19:03:31] envoyées=12886 codes={200: 584, 503: 438, 403: 11864} erreurs={}
+[19:03:36] envoyées=14334 codes={200: 584, 503: 438, 403: 13312} erreurs={}
+[19:03:41] envoyées=15767 codes={200: 584, 503: 438, 403: 14745} erreurs={}
+[19:03:46] envoyées=17228 codes={200: 584, 503: 438, 403: 16206} erreurs={}
+[19:03:51] envoyées=18654 codes={200: 584, 503: 438, 403: 17632} erreurs={}
+[19:03:56] envoyées=19975 codes={200: 584, 503: 438, 403: 18953} erreurs={}
+[19:04:01] envoyées=21440 codes={200: 584, 503: 438, 403: 20418} erreurs={}
+[19:04:06] envoyées=22908 codes={200: 584, 503: 438, 403: 21886} erreurs={}
+[19:04:11] envoyées=24352 codes={200: 584, 503: 438, 403: 23330} erreurs={}
+[19:04:16] envoyées=25827 codes={200: 584, 503: 438, 403: 24805} erreurs={}
+[19:04:21] envoyées=27274 codes={200: 584, 503: 438, 403: 26252} erreurs={}
+[19:04:26] envoyées=28723 codes={200: 584, 503: 438, 403: 27701} erreurs={}
+[19:04:31] envoyées=30161 codes={200: 584, 503: 438, 403: 29139} erreurs={}
+[19:04:36] envoyées=31591 codes={200: 584, 503: 438, 403: 30569} erreurs={}
+[19:04:37] fin. envoyées=31591 codes={200: 584, 503: 438, 403: 30569} erreurs={}

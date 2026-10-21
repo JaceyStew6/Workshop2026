@@ -3,4 +3,4 @@
 # `tools/init_secrets.sh` remplace le recipient ci-dessous par la clé publique générée.
 creation_rules:
   - path_regex: secrets/.*\.enc\.yaml$
-    age: REPLACE_WITH_AGE_PUBLIC_KEY
+    age: age1wgmqttk44s92tfj62h0xdhcjrq9tq9pt43589t76v4w7fn8qhv8s9pyqws

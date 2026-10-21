@@ -52,7 +52,10 @@ async def client_loop(base: str, ip: str, stop_at: float, burst_until: list, use
 
 async def burst_scheduler(stop_at: float, burst_until: list):
     while time.time() < stop_at:
-        await asyncio.sleep(random.uniform(60, 240))
+        # ne jamais dormir au-delà de l'heure de fin : sinon le script ne s'arrête que 1 à 4 minutes en retard
+        await asyncio.sleep(min(random.uniform(60, 240), max(0.0, stop_at - time.time())))
+        if time.time() >= stop_at:
+            break
         burst_until[0] = time.time() + random.uniform(20, 40)
 
 

@@ -13,9 +13,9 @@ Lecture : **Couvert** = mécanisme implémenté ET testé ; **Partiel** = implé
 | c) Continuité des activités, sauvegardes, reprise, gestion de crise | Partiel | Sauvegarde/restauration PostgreSQL (Ansible), reprise automatique du service, vérification par transaction | `governance/pca-pra.md`, `ansible/` | Une seule machine, pas de site secondaire, sauvegarde sur le même hôte |
 | d) Sécurité de la chaîne d'approvisionnement | **Écart** | Versions épinglées uniquement | `requirements.txt` | Aucun scan, aucune signature (R8 non traité) |
 | e) Sécurité de l'acquisition, du développement et de la maintenance, gestion des vulnérabilités | Partiel | Tests automatisés par composant, requêtes paramétrées, WAF | suites de tests | Pas de SAST/DAST, pas de processus de correctifs |
-| f) Évaluation de l'efficacité des mesures | Partiel | Scénario d'attaque rejoué, métriques avant/pendant/après, tests de non-régression | `tests/e2e/results/` | Pas d'audit externe ni de test d'intrusion indépendant |
+| f) Évaluation de l'efficacité des mesures | Partiel | Scénario d'attaque rejoué (3 répétitions sous Docker, 300 à 500 req/s, verdict automatique), métriques avant/pendant/après, tests de non-régression | `tests/rehearsals/`, `tests/e2e/results/` | Pas d'audit externe ni de test d'intrusion indépendant |
 | g) Hygiène informatique de base et formation | Hors périmètre | — | — | — |
-| h) Cryptographie et chiffrement | **Écart** | Hachage scrypt, JWT signé, secrets chiffrés au repos (SOPS+age) | `tools/` | **Pas de TLS** en transit (écart assumé, R10) |
+| h) Cryptographie et chiffrement | **Écart** | Hachage scrypt, JWT signé, secrets chiffrés au repos (SOPS+age, cycle de chiffrement et déploiement Ansible exécutés) | `tools/`, `secrets/secrets.enc.yaml` | **Pas de TLS** en transit (écart assumé, R10) |
 | i) Sécurité des ressources humaines, contrôle d'accès, gestion des actifs | Partiel | Rôles SQL minimaux, contrôle de propriété côté API, jetons d'administration distincts | `services/payment-api`, tests | Pas de revue périodique des accès, pas d'inventaire d'actifs formel |
 | j) MFA / communications sécurisées | **Écart** | — | — | Hors périmètre prototype |
 
@@ -29,7 +29,7 @@ Le texte prévoit une alerte précoce, une notification d'incident puis un rappo
 |---|---|---|---|
 | Gestion du risque lié aux TIC | Partiel | Analyse EBIOS RM, cartographie des composants, journalisation | Pas de cadre de gouvernance validé par un organe de direction |
 | Gestion, classification et notification des incidents liés aux TIC | Partiel | Classification technique (disponibilité / compromission / inconnu), chronologie complète | Pas de grille de gravité réglementaire ni de gabarits de déclaration |
-| Tests de résilience opérationnelle numérique | **Partiel, avec preuves** | Scénario d'attaque reproductible, rejoué par le script, avec mesure d'un RTO ; test de restauration | Pas de test d'intrusion piloté par la menace (TLPT) |
+| Tests de résilience opérationnelle numérique | **Partiel, avec preuves** | Scénario d'attaque reproductible (`tools/rehearsal.py`), rejoué 3 fois avec mesure du RTO (reprise 21 à 29 s après le début de l'attaque) ; sauvegarde et restauration de la base exécutées (Ansible, 19 s) sur une base de démonstration | Pas de test d'intrusion piloté par la menace (TLPT) |
 | Risque lié aux prestataires TIC tiers | **Écart** | Images publiques utilisées sans évaluation | Aucun registre des prestataires, aucune clause de sortie |
 | Partage d'informations | Hors périmètre | — | — |
 
