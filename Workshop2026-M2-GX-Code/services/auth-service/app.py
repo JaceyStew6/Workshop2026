@@ -6,7 +6,7 @@ Sécurité :
   * verrouillage temporaire après 5 échecs / 5 min par utilisateur (anti brute force)
   * secrets lus depuis des fichiers (*_FILE), jamais depuis l'environnement en clair
   * rôle SQL limité aux tables users / roles / audit_log
-  * comptes `face_required` : le JWT n'est délivré qu'avec un TICKET FACIAL signé par face-gate (HS256, usage unique,
+  * utilisateurs du portail (ni compte machine, ni rôle d'administration) : le JWT n'est délivré qu'avec un TICKET FACIAL signé par face-gate (HS256, usage unique,
     120 s). Le navigateur ne détient jamais ce ticket : face-gate l'ajoute lui-même au moment du mot de passe.
   * habilitations : le JWT porte la liste des permissions (`perms`) du rôle ; l'API d'administration vérifie
     aussi en base que l'appelant est toujours actif et que les droits accordés ne dépassent pas les siens.
@@ -46,6 +46,14 @@ TOKEN_TTL = int(os.environ.get("TOKEN_TTL_SECONDS", "900"))
 SCRYPT_N = int(os.environ.get("SCRYPT_N", str(2 ** 14)))
 LOCK_AFTER, LOCK_WINDOW = 5, 300
 MIN_PASSWORD_LEN = 12
+# Qui doit passer par la caméra ? Les UTILISATEURS du portail de paiement : la reconnaissance faciale est obligatoire, sans option pour
+# la désactiver (un utilisateur sans visage inscrit ne peut pas se connecter). Exceptions assumées : les comptes MACHINE (sonde, scripts de
+# test) et les comptes d'ADMINISTRATION (rôle portant la permission backoffice:access), qui se connectent par mot de passe seul.
+MACHINE_ROLES = {"probe", "automation"}
+
+
+def needs_face(role: str, perms) -> bool:
+    return role not in MACHINE_ROLES and "backoffice:access" not in perms
 
 PERMISSIONS = {
     "payments:create": "Émettre des virements",
@@ -119,10 +127,12 @@ def check_face_ticket(ticket: Optional[str], username: str, now: float | None = 
 
 # ------------------------------------------------------------------ initialisation
 def seed_users(conn) -> None:
-    """Comptes de démonstration. admin/operator démarrent SANS exigence faciale : tant qu'aucun visage n'est inscrit,
-    exiger la reconnaissance verrouillerait la plateforme. L'exigence s'active automatiquement (face-gate) à la
-    première inscription d'un visage pour ce compte."""
+    """Comptes de démonstration. `demo-user` (portail de paiement) ne peut pas se connecter tant qu'aucun visage n'est inscrit :
+    premier visage par `docker compose exec face-gate python enroll_cli.py <compte>` (accès à l'hôte), les suivants depuis le
+    back-office. `admin` et `operator` (administration) se connectent par mot de passe seul ; `demo-bot` et `synthetic-probe`
+    sont des comptes machine."""
     seed = [("demo-user", secret("DEMO_PASSWORD_FILE"), "user"),
+            ("demo-bot", secret("BOT_PASSWORD_FILE"), "automation"),
             ("synthetic-probe", secret("PROBE_PASSWORD_FILE"), "probe"),
             ("admin", secret("ADMIN_PASSWORD_FILE"), "admin"),
             ("operator", secret("OPERATOR_PASSWORD_FILE"), "operator")]
@@ -204,8 +214,8 @@ def token(creds: Credentials, request: Request):
         log.warning("echec authentification user=%s", creds.username)
         raise HTTPException(401, "Identifiants invalides")
 
-    _, role, face_required, _, perms = row
-    if face_required and not check_face_ticket(creds.face_ticket, creds.username):
+    _, role, _face_flag, _, perms = row
+    if needs_face(role, perms) and not check_face_ticket(creds.face_ticket, creds.username):
         # Mot de passe correct mais pas de preuve de reconnaissance faciale : refus (le mot de passe seul ne suffit pas).
         LOGINS.labels("face_required").inc()
         log.warning("refus: reconnaissance faciale requise user=%s", creds.username)
@@ -277,10 +287,11 @@ def list_users(actor: Actor = Depends(need("backoffice:users"))):
     with pool.connection() as conn:
         rows = conn.execute(
             "SELECT u.username, u.role, u.active, u.face_required, "
-            "(SELECT count(*) FROM face_templates f WHERE f.username = u.username), u.created_at "
+            "(SELECT count(*) FROM face_templates f WHERE f.username = u.username), u.created_at, "
+            "COALESCE((SELECT permissions FROM roles r WHERE r.name = u.role), '{}') "
             "FROM users u ORDER BY u.username").fetchall()
-    return [UserOut(username=r[0], role=r[1], active=r[2], face_required=r[3], faces=r[4], created_at=r[5].isoformat())
-            for r in rows]
+    return [UserOut(username=r[0], role=r[1], active=r[2], face_required=needs_face(r[1], r[6]), faces=r[4],
+                    created_at=r[5].isoformat()) for r in rows]
 
 
 class NewUser(BaseModel):
@@ -289,13 +300,19 @@ class NewUser(BaseModel):
     role: str = Field(min_length=2, max_length=32)
 
 
+def admin_perms(perms) -> set:
+    """Seules les permissions d'ADMINISTRATION sont soumises à la règle anti-escalade : les droits de paiement d'un client ne donnent
+    aucun pouvoir sur la plateforme, un administrateur peut donc créer des utilisateurs du portail sans les détenir lui-même."""
+    return {p for p in perms if p.startswith("backoffice:")}
+
+
 def assignable_role(conn, actor: Actor, role: str) -> None:
-    if role == "probe":
-        raise HTTPException(422, "Le rôle « probe » est réservé aux comptes machine")
+    if role in MACHINE_ROLES:
+        raise HTTPException(422, "Les rôles « probe » et « automation » sont réservés aux comptes machine (sans visage)")
     row = conn.execute("SELECT permissions FROM roles WHERE name=%s", (role,)).fetchone()
     if not row:
         raise HTTPException(422, "Rôle inconnu")
-    if not set(row[0]) <= set(actor.perms):
+    if not admin_perms(row[0]) <= set(actor.perms):       # pas d'escalade : on n'attribue que des droits d'administration qu'on détient
         raise HTTPException(403, "Vous ne pouvez pas attribuer un rôle plus puissant que le vôtre")
 
 
@@ -325,11 +342,12 @@ def patch_user(username: str, body: UserPatch, request: Request, actor: Actor = 
         cur = conn.execute("SELECT role, active, face_required FROM users WHERE username=%s", (username,)).fetchone()
         if not cur:
             raise HTTPException(404, "Utilisateur introuvable")
-        if cur[0] == "probe":
+        if cur[0] in MACHINE_ROLES:
             raise HTTPException(403, "Compte machine : non modifiable ici")
         changes: dict = {}
-        if username == actor.sub and (body.active is False or body.face_required is False
-                                      or (body.role and body.role != cur[0])):
+        if body.face_required is False:
+            raise HTTPException(422, "La reconnaissance faciale est obligatoire pour les utilisateurs du portail : elle ne se désactive pas (un rôle d'administration en est dispensé)")
+        if username == actor.sub and (body.active is False or (body.role and body.role != cur[0])):
             raise HTTPException(422, "Vous ne pouvez pas réduire vos propres droits ou protections")
         if body.role and body.role != cur[0]:
             assignable_role(conn, actor, body.role)
@@ -344,13 +362,6 @@ def patch_user(username: str, body: UserPatch, request: Request, actor: Actor = 
                 raise HTTPException(409, "Il doit rester au moins un administrateur actif")
             conn.execute("UPDATE users SET active=%s WHERE username=%s", (body.active, username))
             changes["active"] = body.active
-        if body.face_required is not None and body.face_required != cur[2]:
-            if body.face_required and conn.execute(
-                    "SELECT count(*) FROM face_templates WHERE username=%s", (username,)).fetchone()[0] == 0:
-                raise HTTPException(409, "Inscrivez d'abord un visage : exiger la reconnaissance sans visage enregistré "
-                                         "verrouillerait ce compte")
-            conn.execute("UPDATE users SET face_required=%s WHERE username=%s", (body.face_required, username))
-            changes["face_required"] = body.face_required
         if body.password:
             conn.execute("UPDATE users SET password_hash=%s WHERE username=%s", (hash_password(body.password), username))
             changes["password"] = "réinitialisé"
@@ -372,8 +383,8 @@ def check_perms(actor: Actor, perms: list[str]) -> None:
     unknown = set(perms) - set(PERMISSIONS)
     if unknown:
         raise HTTPException(422, f"Permissions inconnues : {', '.join(sorted(unknown))}")
-    if not set(perms) <= set(actor.perms):
-        raise HTTPException(403, "Vous ne pouvez accorder que des permissions que vous détenez")
+    if not admin_perms(perms) <= set(actor.perms):
+        raise HTTPException(403, "Vous ne pouvez accorder que des permissions d'administration que vous détenez")
 
 
 @app.get("/auth/admin/roles")

@@ -38,9 +38,9 @@ class PgStore:
 
     def user_info(self, username: str) -> Optional[dict]:
         with self.pool.connection() as conn:
-            row = conn.execute("SELECT username, role, face_required, active FROM users WHERE username=%s",
-                               (username,)).fetchone()
-        return {"username": row[0], "role": row[1], "face_required": row[2], "active": row[3]} if row else None
+            row = conn.execute("SELECT u.username, u.role, u.face_required, u.active, COALESCE(r.permissions, '{}') "
+                               "FROM users u LEFT JOIN roles r ON r.name = u.role WHERE u.username=%s", (username,)).fetchone()
+        return {"username": row[0], "role": row[1], "face_required": row[2], "active": row[3], "perms": list(row[4])} if row else None
 
     def templates(self, username: str) -> list[np.ndarray]:
         with self.pool.connection() as conn:
@@ -95,7 +95,8 @@ class MemoryStore:
         self.audit_log: list[dict] = []
 
     def add_user(self, username: str, role: str = "admin", face_required: bool = True, active: bool = True) -> None:
-        self.users[username] = {"username": username, "role": role, "face_required": face_required, "active": active}
+        perms = ["backoffice:access"] if role in ("admin", "operator") else ["payments:create", "payments:read"]
+        self.users[username] = {"username": username, "role": role, "face_required": face_required, "active": active, "perms": perms}
 
     def user_info(self, username):
         u = self.users.get(username)

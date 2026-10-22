@@ -17,7 +17,7 @@ start_one() {  # nom, répertoire, commande... (variables d'environnement hérit
 }
 
 svc_auth()    { DB_HOST=127.0.0.1 DB_PASSWORD_FILE=$S/db_password JWT_SECRET_FILE=$S/jwt_secret \
-                DEMO_PASSWORD_FILE=$S/demo_password PROBE_PASSWORD_FILE=$S/probe_password \
+                DEMO_PASSWORD_FILE=$S/demo_password BOT_PASSWORD_FILE=$S/bot_password PROBE_PASSWORD_FILE=$S/probe_password \
                 start_one auth "$HERE/services/auth-service" python3 -m uvicorn app:app --port 18001 --no-access-log; }
 svc_payment() { DB_HOST=127.0.0.1 DB_PASSWORD_FILE=$S/db_password JWT_SECRET_FILE=$S/jwt_secret \
                 RISK_COST_ITER="${RISK_COST_ITER:-30000}" \

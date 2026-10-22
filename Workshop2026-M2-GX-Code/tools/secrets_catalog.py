@@ -26,6 +26,7 @@ SPEC = {
     "face_template_key": ("aes256", 32),       # chiffre les empreintes faciales en base (AES-256-GCM)
     "face_agent_token": ("urlsafe", 32),       # jeton entre face-gate et l'agent caméra du PC Hôte
     "device_token": ("urlsafe", 32),           # jeton de l'ESP8266 (compilé dans son firmware)
+    "bot_password": ("urlsafe", 24),           # compte machine « demo-bot » (scripts de test, jamais un humain)
     "admin_password": ("urlsafe", 18),         # compte « admin » du back-office
     "operator_password": ("urlsafe", 18),      # compte « operator » du back-office
 }

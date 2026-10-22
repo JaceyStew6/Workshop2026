@@ -18,7 +18,7 @@ un second PC, l'IP source réelle vue par le WAF dans ce cas, et l'assistant RAG
 
 | Élément | Statut |
 |---|---|
-| Les 15 conteneurs du compose (y compris `docker-compose.yml` lui-même) | **Construits et démarrés avec succès** sous Docker Desktop (Windows 11) |
+| Les 17 services du compose (dont `face-gate`, ajouté pour la consigne additionnelle 1 ; 16 lors des répétitions) | **Construits et démarrés avec succès** sous Docker Desktop (Windows 11) |
 | Flux métier complet (connexion, devis, virement, relecture) | **Vérifié** (`tools/smoke.py`) |
 | Entraînement du détecteur sur du trafic réel de cette pile | **Vérifié** : 132 min de trafic (9 phases actives d'intensité variable, 9 phases d'inactivité), 1 609 échantillons, 7 mesures. Au repos, le score reste entre 0,40 et 0,58 pour un seuil de 0,70 |
 | Chaîne détection → remédiation → reprise (`tools/rehearsal.py`) | **3 répétitions réussies sur 3** (300, 300 puis 500 req/s) : détection en 12 à 17 s, reprise en 21 à 29 s **pendant que l'attaque continue** (preuve que c'est la remédiation qui agit, pas la fin du script), 100 % des virements du client légitime aboutissent ensuite. Détail : `tests/rehearsals/`. L'attaquant est **simulé** sur la même machine |
@@ -26,8 +26,8 @@ un second PC, l'IP source réelle vue par le WAF dans ce cas, et l'assistant RAG
 | Loki / Promtail : centralisation des journaux (WAF, moteur, services) | **Vérifié** après correction (le proxy `docker-ro` bloquait `GET /networks`, dont Promtail a besoin : Loki ne recevait rien) |
 | SOPS + age : génération et chiffrement des secrets, déchiffrement dans `.secrets/` | **Vérifié** sous WSL Ubuntu 24.04 (voir « Déploiement officiel sous WSL ») |
 | Ansible : `deploy.yml`, `backup.yml`, `reset-demo.yml`, `restore.yml` | **Vérifiés** de bout en bout (déploiement 7/7 tâches OK, remise à zéro en 12 s, restauration en 19 s) |
-| Tests unitaires (voir « Tests » pour le détail) | **Exécutés** : waf 37/37, remediation-engine 19/19, ml-detector 8/8, rag-assistant 10/10, dashboard 6/6 + build, **face-gate 28/28, auth-service 15/15, agent hôte 12/12** |
-| **Consigne additionnelle 1** : back-office en 3 étapes (identifiant, visage, mot de passe), habilitations, voyant ESP8266 (`docs/biometric-auth.md`) | **Vérifié de bout en bout à travers le WAF avec une caméra SIMULÉE** (`tests/e2e/face_flow.py`, vrais délais 30 s / 10 s / 5 min), interface testée dans un navigateur, firmware **compilé** (PlatformIO, NodeMCU v2) et logique du voyant testée sur PC. **Non vérifié : vraie caméra USB et vrais visages (qualité de reconnaissance, seuil), ESP8266 physique (jamais flashé), détection de vivacité (absente)** |
+| Tests unitaires (voir « Tests » pour le détail) | **Exécutés** : waf 37/37, remediation-engine 19/19, ml-detector 8/8, rag-assistant 10/10, dashboard 6/6 + build, **face-gate 29/29, auth-service 17/17, agent hôte 12/12** |
+| **Consigne additionnelle 1** : back-office en 3 étapes (identifiant, visage, mot de passe), habilitations, voyant ESP8266 (`docs/biometric-auth.md`) | **Vérifié de bout en bout à travers le WAF avec une caméra simulée** (`tests/e2e/face_flow.py`, vrais délais 30 s / 10 s / 5 min), **puis essayé avec une vraie caméra USB : inscription du visage et connexion en trois étapes fonctionnelles** ; interface testée dans un navigateur, firmware **compilé** (PlatformIO, NodeMCU v2) et logique du voyant testée sur PC. **Non vérifié : ESP8266 physique (jamais flashé), taux de faux rejets / faux accepts (non mesurés), détection de vivacité (absente)** |
 | Assistant RAG : tests unitaires OK, mais appel réel à Ollama (modèle, embeddings) | **Non vérifié** sur ce poste (pas d'Ollama installé) |
 | Scanner de secrets (`tools/check_no_plaintext_secrets.sh`) | **Exécuté** : il confirme que `secrets.enc.yaml` est chiffré ; il signale `.secrets/` présent, ce qui est attendu en local (à rejouer sur l'archive finale) |
 | promtool (validation des règles d'alerte) | **Vérifié** (`promtool check rules` : 9 règles, dont 3 pour la biométrie) |
@@ -112,15 +112,15 @@ docker compose up -d --wait --wait-timeout 240 --scale ml-detector=0
 .\.venv\Scripts\python.exe tools\smoke.py --base http://127.0.0.1
 ```
 
-Pour la connexion au back-office, lancer **dans un second terminal laissé ouvert** l'agent de la caméra : `.\host-agent\run-agent.ps1` (ou `-Fake` pour une caméra simulée, sans matériel). Sans lui, `face-gate` répond « service de reconnaissance indisponible » et personne ne se connecte au back-office (échec fermé voulu) ; le portail de paiement n'est pas concerné.
+Pour la connexion des utilisateurs du portail de paiement (et l'inscription des visages), lancer **dans un second terminal laissé ouvert** l'agent de la caméra : `.\host-agent\run-agent.ps1` (ou `-Fake` pour une caméra simulée, sans matériel). Sans lui, `face-gate` répond « service de reconnaissance indisponible » et aucun utilisateur du portail ne se connecte (échec fermé voulu) ; le back-office (administration) n'est pas concerné.
 
 `docker compose ps` doit afficher tous les services `healthy`/`Up`. Le smoke test doit afficher 4
 lignes `[OK]`. Accès :
 
 | Service | URL | Identifiants |
 |---|---|---|
-| Portail de paiement | http://127.0.0.1 | `demo-user` / `Get-Content .secrets\demo_password` |
-| **Back-office** (utilisateurs, rôles, visages, voyant, audit) | http://127.0.0.1/backoffice.html | `admin` / `Get-Content .secrets\admin_password` (puis inscrire son visage : il devient exigé) ; `operator` / `.secrets\operator_password` |
+| Portail de paiement | http://127.0.0.1 | `demo-user` : **visage (caméra) puis** mot de passe `Get-Content .secrets\demo_password` |
+| **Back-office** (utilisateurs, rôles, visages, voyant, audit) | http://127.0.0.1/backoffice.html | `admin` / `operator` : identifiant + mot de passe, **sans visage** (`.secrets\admin_password`, `.secrets\operator_password`) |
 | Tableau de bord | http://127.0.0.1:8088 | — |
 | Grafana | http://127.0.0.1:3000 | `admin` / `Get-Content .secrets\grafana_password` |
 | Prometheus (requêtes brutes uniquement, pas un tableau de bord) | http://127.0.0.1:9090 | — |
@@ -132,7 +132,7 @@ Voir la section dédiée « Entraîner le détecteur » plus bas pour le détail
 Résumé rapide :
 
 ```powershell
-.\.venv\Scripts\python.exe redteam\normal_traffic.py --base http://127.0.0.1 --minutes 15 --password (Get-Content .secrets\demo_password)
+.\.venv\Scripts\python.exe redteam\normal_traffic.py --base http://127.0.0.1 --minutes 15 --password (Get-Content .secrets\bot_password)
 # attendre 5 minutes sans toucher au portail (le calme doit aussi être appris comme "normal")
 Set-Location services\ml-detector
 ..\..\.venv\Scripts\python.exe collect.py --prom http://127.0.0.1:9090 --minutes 20 --out data\normal.csv
@@ -161,6 +161,59 @@ docker compose up -d --wait --wait-timeout 240
 Pour arrêter proprement : `docker compose down` (garde les volumes/données) ou `docker compose down -v`
 (efface aussi la base et les bans).
 
+### 5. Back-office biométrique : première mise en route (caméra, premier visage, voyant)
+
+Détail complet : `docs/biometric-auth.md`. Essayé avec une vraie caméra USB : inscription du visage et connexion en trois
+étapes fonctionnelles. Dans l'ordre :
+
+```powershell
+# a. Régler la caméra : la personne se place devant (aucune image enregistrée, seulement des statistiques).
+#    Fermer avant toute application qui utilise la caméra (Teams, Zoom, Appareil photo).
+Set-Location host-agent; ..\.venv\Scripts\python.exe selftest.py --seconds 6; Set-Location ..
+#    « caméra introuvable » : essayer --camera-index 1 (puis lancer l'agent avec -Camera 1)
+
+# b. Lancer l'agent de la caméra dans un second terminal, à laisser ouvert (à refaire à chaque démarrage du PC)
+.\host-agent\run-agent.ps1
+
+# c. Lire le mot de passe d'un compte (admin ici) : il ne sert qu'APRÈS la reconnaissance faciale
+Get-Content .secrets\admin_password
+```
+
+**Règle : les utilisateurs du portail de paiement (`demo-user`, tout client créé ensuite) ne se connectent pas sans reconnaissance faciale.** La page d'administration (`/backoffice.html`) n'en demande pas : `admin` et `operator` (rôles portant l'accès au back-office) se connectent par identifiant + mot de passe. Les comptes MACHINE (`synthetic-probe`, `demo-bot`) aussi : ils servent aux scripts (test de fumée, trafic normal, répétitions, entraînement), jamais à un humain. Conséquence : **un utilisateur du portail sans visage inscrit ne peut pas se connecter.** Son premier visage s'inscrit depuis le PC Hôte (accès à Docker requis), caméra devant soi, ou depuis le back-office par un administrateur :
+
+```powershell
+docker compose exec face-gate python enroll_cli.py demo-user
+```
+
+Le script compte 3 s pour vous laisser vous placer, allume la caméra, enregistre une empreinte puis l'éteint. Ensuite :
+
+1. Ouvrir http://127.0.0.1 (portail de paiement) : saisir l'identifiant, « Continuer » ; la caméra s'allume, regardez l'objectif ; visage reconnu (voyant vert clignotant) : saisir le mot de passe (voyant vert fixe 30 s, accès). Un visage non reconnu donne un voyant rouge fixe 30 s, l'identifiant est effacé et la caméra s'éteint ; deux échecs de suite bloquent l'identification 5 minutes.
+2. Administration : http://127.0.0.1/backoffice.html, `admin` + mot de passe (`Get-Content .secrets\admin_password`), sans caméra. Onglet **Utilisateurs** : créer un client (rôle `user`), puis **Visages** : saisir son identifiant, « Inscrire un visage », la personne devant la caméra. Il ne peut pas se connecter avant cette inscription.
+3. `enroll_cli.py` sert aussi de **récupération** (visage devenu méconnaissable) : aucun contournement du visage n'existe pour un utilisateur du portail.
+
+Messages d'erreur fréquents : « agent caméra injoignable » = l'agent n'est pas lancé (étape b) ; « service de reconnaissance
+indisponible » à la connexion du portail = idem ; faux rejets répétés = réinscrire le visage dans les conditions réelles, ou baisser `FACE_THRESHOLD` dans `.env`
+(puis `docker compose up -d face-gate`). Accès de secours si la caméra est perdue : `docs/runbooks.md`, section « Biométrie ».
+
+> `tests/e2e/face_flow.py` ne touche ni aux comptes ni aux visages réels : il crée deux comptes jetables avec des visages SIMULÉS
+> (arrêter l'agent réel, lancer `.\host-agent\run-agent.ps1 -Fake`, puis relancer l'agent réel après le test).
+
+**Voyant physique (ESP8266, jamais flashé sur ce poste : firmware compilé et logique testée sur PC seulement)** : câblage (LED bicolore, GPIO5 vert,
+GPIO4 rouge, 220 Ω) et protocole dans `docs/biometric-auth.md`.
+
+```powershell
+# WiFi du hotspot + jeton de l'appareil -> firmware\esp8266-led\include\secrets.h (non versionné ; le mot de passe WiFi est demandé au clavier)
+.\.venv\Scripts\python.exe tools\make_firmware_config.py --ssid <nom-du-hotspot>
+# Puis ouvrir firmware\esp8266-led dans CLion (plugin PlatformIO) et téléverser (ou : pio run -t upload)
+# Sans ESP, voir le voyant dans le terminal :
+.\.venv\Scripts\python.exe firmware\esp8266-led\sim\led_sim.py --base http://127.0.0.1
+```
+
+Pour que l'ESP joigne le PC, le WAF doit écouter sur l'IP du hotspot : `HOST_IP=192.168.137.1` dans `.env` (puis `docker compose up -d`),
+et autoriser le port 80 dans le pare-feu Windows. Sur un réseau d'entreprise qui intercepte TLS, `pio` peut échouer à télécharger sa chaîne d'outils
+(`certificate verify failed`) : lui fournir les autorités du magasin Windows plutôt que désactiver la vérification (variables `SSL_CERT_FILE` et `REQUESTS_CA_BUNDLE`
+pointant vers un fichier PEM exporté du magasin Windows).
+
 ---
 
 ## Essai sur un seul poste : bannissement et identités simulées
@@ -177,7 +230,7 @@ WAF fasse confiance à l'en-tête `X-Forwarded-For` pour simuler des identités 
 # Trafic normal avec des identités d'utilisateurs simulées (plage RFC 5737, réservée à la documentation)
 .\.venv\Scripts\python.exe redteam\normal_traffic.py --base http://127.0.0.1 --minutes 15 `
   --spoof-ips 203.0.113.11,203.0.113.12,203.0.113.13,203.0.113.14,203.0.113.15 `
-  --password (Get-Content .secrets\demo_password)
+  --password (Get-Content .secrets\bot_password)
 
 # Attaque avec une identité distincte -- CHANGER le dernier chiffre à CHAQUE essai, sinon elle retombe
 # sur un bannissement déjà actif (10 min de TTL) et rien ne se passe, l'attaque n'atteint jamais le service
@@ -225,7 +278,7 @@ docker compose stop ml-detector
 # 1. Session de collecte : ~2 h 12 de trafic légitime, phases actives (intensité variable, rafales) alternées
 #    avec des phases d'inactivité réelle. Garder le PC éveillé, ne rien lancer d'autre sur la plateforme.
 .\.venv\Scripts\python.exe tools\training_session.py --base http://127.0.0.1 --hours 2.2
-#    (lit .secrets\demo_password ; journal des phases : services\ml-detector\data\training_session.jsonl)
+#    (compte machine demo-bot, lit .secrets\bot_password ; journal des phases : services\ml-detector\data\training_session.jsonl)
 
 # 2. Exporter les mesures depuis Prometheus : --end = "session_end" du journal, --minutes = durée totale + 2
 Set-Location services\ml-detector
@@ -325,8 +378,8 @@ Pour face-gate et auth-service : `.\.venv\Scripts\python.exe -m pip install -q "
 | ml-detector | 8 passés |
 | rag-assistant | 10 passés (un test écrivait son fichier en cp1252 sous Windows ; corrigé en forçant `encoding="utf-8"`) |
 | dashboard | 6 passés, `npm run build` réussit |
-| face-gate | 28 passés |
-| auth-service | 15 passés |
+| face-gate | 29 passés |
+| auth-service | 17 passés |
 | agent hôte | 12 passés |
 | firmware (logique du voyant) | OK ; compilation PlatformIO réussie (RAM 35 %, flash 28 %) |
 | `tests/e2e/face_flow.py` | tous les contrôles passés (caméra simulée) |

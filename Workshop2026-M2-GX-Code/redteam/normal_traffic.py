@@ -37,7 +37,7 @@ async def client_loop(base: str, ip: str, stop_at: float, burst_until: list, use
                     token = r.json().get("access_token") if r.status_code == 200 else None
                 if token:
                     amount = round(random.uniform(1, 200), 2)
-                    src, dst = random.choice([("ACC-DEMO-1", "ACC-DEMO-2"), ("ACC-DEMO-2", "ACC-DEMO-1")])
+                    src, dst = random.choice([("ACC-BOT-1", "ACC-BOT-2"), ("ACC-BOT-2", "ACC-BOT-1")])
                     await c.post("/api/payments", headers={"Authorization": f"Bearer {token}"},
                                  json={"from": src, "to": dst, "amount": amount})
                     if random.random() < 0.4:
@@ -82,7 +82,7 @@ if __name__ == "__main__":
                                          "virgules ; pour un essai sur un seul poste. Sans effet si TRUSTED_PROXIES "
                                          "n'est pas réglé côté WAF")
     ap.add_argument("--clients-per-source", type=int, default=2)
-    ap.add_argument("--user", default="demo-user")
+    ap.add_argument("--user", default="demo-bot")   # compte machine : les humains exigent le visage
     ap.add_argument("--password", default="demo-password")
     a = ap.parse_args()
     if a.spoof_ips:

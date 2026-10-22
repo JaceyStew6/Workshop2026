@@ -9,6 +9,7 @@ import argparse
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 import pymupdf
@@ -32,9 +33,15 @@ def main():
         sys.exit("ni Edge ni Chrome trouvé")
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         raw = Path(tmp) / "raw.pdf"
-        subprocess.run([browser, "--headless", "--disable-gpu", "--no-pdf-header-footer",
+        # profil temporaire : sans lui, une instance d'Edge déjà ouverte absorbe la commande et aucun PDF n'est produit
+        subprocess.run([browser, "--headless", "--disable-gpu", "--no-pdf-header-footer", f"--user-data-dir={Path(tmp) / 'profile'}",
                         f"--print-to-pdf={raw}", Path(a.html).resolve().as_uri()], check=True, timeout=180,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        for _ in range(120):                       # Edge peut rendre la main avant que le PDF soit écrit
+            if raw.exists() and raw.stat().st_size > 0:
+                time.sleep(1)
+                break
+            time.sleep(0.5)
         doc = pymupdf.open(raw)
         grey = (0.39, 0.45, 0.55)
         for i, page in enumerate(doc, 1):

@@ -7,7 +7,7 @@ mot de passe. Un voyant bicolore, piloté par un ESP8266 connecté au WiFi du ho
 
 | Étape | Comportement | Où c'est décidé |
 |---|---|---|
-| 1. Identifiant | Saisie, bouton « Continuer ». Un compte **sans** exigence faciale (ex. `demo-user`, comptes machine) passe directement au mot de passe : la caméra reste éteinte | `face-gate` (`identify`) |
+| 1. Identifiant | Saisie, bouton « Continuer ». Un compte **d'administration** (`admin`, `operator`) ou **machine** (`synthetic-probe`, `demo-bot`) passe directement au mot de passe, caméra éteinte. **Tout utilisateur du portail, `demo-user` compris, passe par la caméra** | `face-gate` (`identify`) |
 | 2. Caméra | Allumée **seulement** à ce moment ; quelques images sont analysées en mémoire, comparées aux empreintes chiffrées de l'utilisateur ; aucune image n'est conservée | agent hôte + `face-gate` |
 | 2a. Reconnu | Voyant **vert clignotant jusqu'à la saisie du mot de passe** (délai maximal 120 s, puis tout s'éteint) | `face-gate` |
 | 2b. Non reconnu | Identifiant **vidé**, voyant **rouge fixe 30 s**, puis caméra **éteinte** et identifiant ressaisissable. **1 nouvel essai**, puis **blocage 5 minutes**, et ainsi de suite (le blocage se répète) | `face-gate` |
@@ -18,7 +18,7 @@ mot de passe. Un voyant bicolore, piloté par un ESP8266 connecté au WiFi du ho
 Choix d'interprétation (à valider avec les enseignants) :
 - Les **échecs de mot de passe** ne comptent pas dans le blocage de 5 minutes (la consigne l'associe à la reconnaissance). Ils sont
   limités par `auth-service` (5 échecs / 5 min par compte) et chaque nouvel essai impose un nouveau scan facial.
-- Le « back-office » est la page `/backoffice.html` (administration). Le portail de paiement garde sa connexion mot de passe pour `demo-user`.
+- **La reconnaissance faciale est obligatoire pour les utilisateurs du portail de paiement.** Elle ne se désactive pas (ni par l'API ni par un drapeau). Sont dispensés : la page d'administration (`/backoffice.html`, mot de passe seul pour les rôles portant la permission `backoffice:access`) et les comptes machine `probe` et `automation`, que l'API refuse d'attribuer à un utilisateur. Un utilisateur du portail sans visage inscrit ne peut pas se connecter. **Choix assumé : le compte le plus puissant (`admin`) est protégé par le mot de passe seul** (risque R16).
 - Après un visage non reconnu, la caméra reste allumée pendant les 30 s du voyant rouge, comme l'écrit la consigne (« rouge fixe 30 s, puis caméra éteinte »).
 
 ## 2. Architecture
@@ -35,7 +35,7 @@ navigateur ──► WAF ──► face-gate ──► agent hôte (PC Hôte, 12
   API liée à `127.0.0.1`, jeton secret, caméra ouverte sur demande, **chien de garde** qui l'éteint seul (5 à 300 s).
 - **face-gate** (`services/face-gate/`) : machine à états de la connexion, comparaison des empreintes (similarité cosinus ≥ 0,40 sur au
   moins 3 images sur 5), verrouillage, voyant, inscription des visages. Une seule session à la fois (une seule caméra).
-- **auth-service** : refuse de délivrer un jeton à un compte `face_required` sans **ticket facial** valide (signé HS256 par face-gate,
+- **auth-service** : refuse de délivrer un jeton à tout utilisateur du portail sans **ticket facial** valide (signé HS256 par face-gate,
   120 s, **usage unique**, lié à l'identifiant). Le navigateur ne voit jamais le ticket : face-gate relaie lui-même le mot de passe.
   Un mot de passe volé ne suffit donc pas, même en appelant `/auth/token` directement (testé : HTTP 403).
 - **Habilitations** : table `roles` (permissions), jeton JWT avec `perms`, API d'administration `/auth/admin/*` et `/gate/*`. Rôles d'origine : `admin`, `operator`, `user`, `probe`.
@@ -93,10 +93,10 @@ cd host-agent; ..\.venv\Scripts\python.exe selftest.py --seconds 6; cd ..
 docker compose up -d --build --wait
 ```
 
-Premier compte : `admin` (mot de passe : `Get-Content .secrets\admin_password`) n'exige **pas** encore le visage. Ouvrir
-`http://127.0.0.1/backoffice.html`, se connecter, onglet **Visages** : inscrire son propre visage. À partir de là, `admin` exige la reconnaissance
-(l'exigence s'active automatiquement à la première inscription). Les autres comptes : créer l'utilisateur (onglet Utilisateurs), inscrire son visage,
-c'est tout. `operator` est créé de la même façon (`.secrets\operator_password`).
+Administration : `admin` et `operator` se connectent sur `http://127.0.0.1/backoffice.html` avec leur mot de passe (`.secrets\admin_password`), sans caméra. Utilisateurs
+du portail : créer le client (onglet Utilisateurs, rôle `user`), puis inscrire son visage (onglet Visages, la personne devant la caméra) ; ou, pour le premier visage d'un compte,
+depuis le PC Hôte : `docker compose exec face-gate python enroll_cli.py demo-user`. Ensuite il se connecte au portail par visage puis mot de passe. Les scripts de test utilisent
+le compte machine `demo-bot` (`.secrets\bot_password`, comptes `ACC-BOT-1/2`) : ils ne passent pas par la caméra, et aucun humain ne doit l'utiliser.
 
 Voyant physique : `python tools\make_firmware_config.py --ssid <hotspot>` (génère `include/secrets.h`, non versionné), ouvrir le dossier dans CLion
 (ou `pio run -t upload`). Pour que l'ESP joigne le PC il faut que le WAF écoute sur l'IP du hotspot : `HOST_IP=192.168.137.1` dans `.env`
@@ -111,17 +111,19 @@ Voyant physique : `python tools\make_firmware_config.py --ssid <hotspot>` (gén�
 - **Limite connue : pas de détection de vivacité.** Une photo ou une vidéo présentée devant la caméra peut tromper le modèle. Compensations : second facteur (mot de passe), blocage, journal
   d'audit, alerte `FaceAuthFailures`. Une vraie détection de vivacité (caméra infrarouge, défi aléatoire) est la suite logique.
 - L'échange avec l'ESP est en HTTP clair sur le WiFi du hotspot (jeton d'appareil exposé en cas d'écoute) : cohérent avec l'écart TLS du prototype (R10). Le jeton ne donne accès qu'à l'état du voyant.
-- Taux d'erreur : le seuil (0,40) vient de la recommandation d'OpenCV pour SFace (0,363) avec marge. **Non mesuré sur des visages réels dans ce dépôt** : à calibrer avec l'équipe (`FACE_THRESHOLD` dans `.env`).
+- Taux d'erreur : le seuil (0,40) vient de la recommandation d'OpenCV pour SFace (0,363) avec marge. Fonctionne avec une vraie caméra, mais **les taux de faux rejets et de faux accepts n'ont pas été mesurés** (pas d'échantillon de personnes) : à calibrer si besoin (`FACE_THRESHOLD` dans `.env`).
 
 ## 6. Tests
 
 | Test | Commande | Couvre |
 |---|---|---|
 | Agent hôte (caméra simulée) | `python -m pytest host-agent/tests` | jeton, cycle de vie de la caméra, chien de garde, refus d'images (aucun visage, plusieurs, trop petit) |
-| Logique de connexion | `cd services/face-gate; python -m pytest tests` | 28 cas : chaque motif de voyant, blocage répété, caméra jamais allumée sans session, échec fermé, ticket, chiffrement, habilitations |
-| auth-service | `cd services/auth-service; python -m pytest tests` | ticket obligatoire, usage unique, signature/expiration/sujet, permissions |
+| Logique de connexion | `cd services/face-gate; python -m pytest tests` | 29 cas : chaque motif de voyant, blocage répété, caméra jamais allumée sans session, échec fermé, ticket, chiffrement, habilitations |
+| auth-service | `cd services/auth-service; python -m pytest tests` | ticket obligatoire pour tout humain (drapeau ignoré), usage unique, signature/expiration/sujet, seuls les comptes machine sans visage, permissions |
 | Firmware (logique) | `wsl sh firmware/esp8266-led/test/run-tests.sh` | motifs, 10 clignotements, extinction sûre, débordement de `millis()` |
 | Firmware (compilation) | `pio run` | compilé pour NodeMCU v2 : RAM 35 %, flash 28 % |
 | Bout en bout à travers le WAF | `python tests/e2e/face_flow.py` | tout le parcours avec les vrais délais et la caméra **simulée** (`run-agent.ps1 -Fake`) |
 
-**Non vérifié sur ce poste** : reconnaissance avec une vraie caméra USB et de vrais visages ; fonctionnement du firmware sur un ESP8266 physique (compilé, logique testée, jamais flashé).
+**Essayé avec une vraie caméra USB** : inscription du visage et connexion en trois étapes fonctionnelles (constat de l'équipe, sans campagne de mesure).
+
+**Non vérifié sur ce poste** : fonctionnement du firmware sur un ESP8266 physique (compilé, logique testée, jamais flashé) ; taux de faux rejets et de faux accepts sur un échantillon de personnes ; résistance à une photo ou une vidéo (aucune détection de vivacité).

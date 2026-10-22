@@ -25,6 +25,19 @@ INSERT INTO roles (name, description, permissions, system) VALUES
      ARRAY['payments:create','payments:read'], true)
 ON CONFLICT (name) DO NOTHING;
 
+INSERT INTO roles (name, description, permissions, system) VALUES
+  ('automation', 'Compte machine (scripts de test et trafic de démonstration) : jamais interactif, sans visage',
+     ARRAY['payments:create','payments:read'], true)
+ON CONFLICT (name) DO NOTHING;
+
+-- Comptes bancaires du compte machine `demo-bot` : les scripts de test (smoke, trafic normal, répétitions, entraînement) ne
+-- doivent PAS utiliser un compte humain, qui exige la reconnaissance faciale. L'invariant comptable est préservé : le total
+-- attendu est augmenté du montant des comptes réellement créés (rien si la migration est rejouée).
+WITH ins AS (
+  INSERT INTO accounts (id, owner, balance) VALUES ('ACC-BOT-1', 'demo-bot', 1000000000.00), ('ACC-BOT-2', 'demo-bot', 1000000000.00)
+  ON CONFLICT (id) DO NOTHING RETURNING balance)
+UPDATE ledger_meta SET value = value + COALESCE((SELECT SUM(balance) FROM ins), 0) WHERE key = 'expected_total';
+
 -- ---------------------------------------------------------------- utilisateurs
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS face_required BOOLEAN NOT NULL DEFAULT false;
@@ -79,6 +92,7 @@ GRANT USAGE, SELECT ON SEQUENCE audit_log_id_seq TO auth_svc;
 
 -- face-gate : lit l'identité de l'utilisateur, gère les empreintes, active l'exigence faciale à la 1re inscription
 GRANT SELECT (username, role, face_required, active) ON users TO gate_svc;
+GRANT SELECT ON roles TO gate_svc;                    -- permissions du rôle : décide si le visage est exigé
 GRANT UPDATE (face_required) ON users TO gate_svc;
 GRANT SELECT, INSERT, DELETE ON face_templates TO gate_svc;
 GRANT USAGE, SELECT ON SEQUENCE face_templates_id_seq TO gate_svc;

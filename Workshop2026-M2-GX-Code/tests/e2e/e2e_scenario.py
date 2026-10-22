@@ -41,13 +41,13 @@ def main():
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    pwd = Path(RUN, ".secrets/demo_password").read_text().strip()
+    pwd = Path(RUN, ".secrets/bot_password").read_text().strip()
 
     print("[1] trafic normal en arrière-plan", flush=True)
     normal = subprocess.Popen(
         [sys.executable, str(ROOT / "redteam/normal_traffic.py"), "--base", a.base, "--minutes", str((a.baseline + a.max_wait) / 60 + 1),
          "--sources", "5", "--clients-per-source", "2", "--source-ips", "192.168.137.31,192.168.137.32,192.168.137.33,192.168.137.34,192.168.137.35",
-         "--user", "demo-user", "--password", pwd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+         "--user", "demo-bot", "--password", pwd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(a.baseline)
     before = get_json(a.state)
     if before.get("open_incidents"):
@@ -79,7 +79,7 @@ def main():
             final = inc
             break
     print("[3] transaction de contrôle PENDANT que l'attaque continue (l'attaquant est banni)", flush=True)
-    smoke_during = subprocess.run([sys.executable, str(ROOT / "tools/smoke.py"), "--base", a.base, "--secret-file", f"{RUN}/.secrets/demo_password"],
+    smoke_during = subprocess.run([sys.executable, str(ROOT / "tools/smoke.py"), "--base", a.base, "--secret-file", f"{RUN}/.secrets/bot_password"],
                                   capture_output=True, text=True)
     (out / "smoke-during-attack.txt").write_text(smoke_during.stdout + smoke_during.stderr)
     try:
@@ -88,7 +88,7 @@ def main():
         atk.terminate()
     time.sleep(3)
     print("[4] transaction de contrôle APRÈS la fin de l'attaque", flush=True)
-    smoke = subprocess.run([sys.executable, str(ROOT / "tools/smoke.py"), "--base", a.base, "--secret-file", f"{RUN}/.secrets/demo_password"],
+    smoke = subprocess.run([sys.executable, str(ROOT / "tools/smoke.py"), "--base", a.base, "--secret-file", f"{RUN}/.secrets/bot_password"],
                            capture_output=True, text=True)
     (out / "smoke-after.txt").write_text(smoke.stdout + smoke.stderr)
     normal.terminate()

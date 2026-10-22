@@ -8,5 +8,5 @@ $root = Split-Path -Parent $PSScriptRoot
 $py = Join-Path $root ".venv\Scripts\python.exe"
 $args = @("$PSScriptRoot\agent.py", "--token-file", "$root\.secrets\face_agent_token", "--camera-index", $Camera)
 if ($Fake) { $args += "--fake" }
-Set-Location $PSScriptRoot
-& $py @args
+Push-Location $PSScriptRoot      # le terminal appelant reste dans son dossier
+try { & $py @args } finally { Pop-Location }

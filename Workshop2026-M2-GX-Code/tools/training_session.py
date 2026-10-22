@@ -1,6 +1,6 @@
 """Session de collecte pour l'entraînement du détecteur : alterne des phases ACTIVES et des phases d'INACTIVITÉ.
 
-  python tools/training_session.py --base http://127.0.0.1 --hours 2.2 --password-file .secrets/demo_password
+  python tools/training_session.py --base http://127.0.0.1 --hours 2.2 --password-file .secrets/bot_password
 
 Pourquoi : un modèle entraîné sur un trafic continu apprend que « rien ne se passe » est anormal (faux
 incidents au repos), et un enregistrement court rend le seuil instable (quantile 99,9 % calculé sur trop peu
@@ -43,8 +43,8 @@ def main():
     ap.add_argument("--idle-min", type=float, nargs=2, default=[3, 7], metavar=("MIN", "MAX"),
                     help="durée d'une phase d'inactivité, en minutes")
     ap.add_argument("--final-idle-min", type=float, default=5, help="inactivité finale, en minutes")
-    ap.add_argument("--password-file", default=str(ROOT / ".secrets" / "demo_password"))
-    ap.add_argument("--user", default="demo-user")
+    ap.add_argument("--password-file", default=str(ROOT / ".secrets" / "bot_password"))
+    ap.add_argument("--user", default="demo-bot")
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--log", default=str(ROOT / "services" / "ml-detector" / "data" / "training_session.jsonl"))
     a = ap.parse_args()

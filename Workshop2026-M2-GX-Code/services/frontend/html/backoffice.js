@@ -64,9 +64,9 @@
       const sel = h('select', { 'aria-label': 'Rôle de ' + x.username }, opts.map((n) => h('option', { value: n, selected: n === x.role }, n)));
       sel.disabled = x.role === 'probe' || x.username === me.user;
       sel.addEventListener('change', () => patch(x.username, { role: sel.value }, 'Rôle modifié.'));
-      const face = h('input', { type: 'checkbox', checked: x.face_required, 'aria-label': 'Visage exigé pour ' + x.username });
-      face.disabled = x.role === 'probe' || x.username === me.user;
-      face.addEventListener('change', async () => { const res = await patch(x.username, { face_required: face.checked }, 'Exigence faciale mise à jour.'); if (!res.ok) face.checked = !face.checked; });
+      const face = x.face_required
+        ? h('span', { class: x.faces ? 'muted' : 'ko' }, x.faces ? 'obligatoire' : 'obligatoire : AUCUN visage inscrit, connexion impossible')
+        : h('span', { class: 'muted' }, 'non (administration ou compte machine)');
       const act = h('input', { type: 'checkbox', checked: x.active, 'aria-label': 'Actif : ' + x.username });
       act.disabled = x.role === 'probe' || x.username === me.user;
       act.addEventListener('change', async () => { const res = await patch(x.username, { active: act.checked }, 'Compte mis à jour.'); if (!res.ok) act.checked = !act.checked; });
@@ -80,11 +80,11 @@
     const nr = h('select', { 'aria-label': 'Rôle' }, roles.map((n) => h('option', { value: n }, n)));
     const add = h('button', { type: 'button', onclick: async () => {
       const res = await call('POST', '/auth/admin/users', { username: nu.value.trim(), password: np.value, role: nr.value });
-      notice(msg, res, 'Utilisateur créé. Inscrivez son visage (onglet Visages) pour activer l\'exigence faciale.'); if (res.ok) usersTab(box);
+      notice(msg, res, 'Utilisateur créé. Il ne pourra pas se connecter avant l\'inscription de son visage (onglet Visages).'); if (res.ok) usersTab(box);
     } }, 'Créer');
     box.replaceChildren(h('div', { class: 'card' }, h('h2', null, 'Utilisateurs'),
-      table(['Identifiant', 'Rôle', 'Visage exigé', 'Visages', 'Actif', ''], rows),
-      h('p', { class: 'muted' }, 'Exiger le visage n\'est possible qu\'après l\'inscription d\'un visage (sinon le compte serait verrouillé). Vous ne pouvez pas réduire vos propres droits. Un jeton déjà émis reste valable jusqu\'à 15 minutes, mais les actions d\'administration vérifient le compte en base à chaque appel.')),
+      table(['Identifiant', 'Rôle', 'Reconnaissance faciale', 'Visages inscrits', 'Actif', ''], rows),
+      h('p', { class: 'muted' }, 'La reconnaissance faciale est obligatoire pour les utilisateurs du portail de paiement et ne se désactive pas : un utilisateur sans visage inscrit ne peut pas se connecter. Sont dispensés : les comptes d\'administration (rôles portant l\'accès au back-office, mot de passe seul) et les comptes machine (sonde, scripts de test). Vous ne pouvez pas réduire vos propres droits. Un jeton déjà émis reste valable jusqu\'à 15 minutes, mais les actions d\'administration vérifient le compte en base à chaque appel.')),
     h('div', { class: 'card' }, h('h3', null, 'Nouvel utilisateur'),
       h('div', { class: 'row' }, h('div', { class: 'grow' }, nu), h('div', { class: 'grow' }, np), h('div', null, nr), add),
       h('p', { class: 'muted' }, 'Mot de passe : 12 caractères minimum.')), msg);
@@ -141,7 +141,7 @@
         clearInterval(t); go.disabled = false; cam.className = 'pill off'; cam.textContent = 'Caméra : éteinte';
         const why = { no_face: 'aucun visage détecté', multiple_faces: 'plusieurs visages dans le champ', too_small: 'visage trop petit : rapprochez-vous',
           inconsistent: 'images incohérentes (une seule personne, sans bouger)', partial: 'trop peu d\'images exploitables', timeout: 'délai dépassé', agent_unavailable: 'agent caméra injoignable (lancez host-agent/run-agent.ps1)' };
-        if (s.data.state === 'done') facesTab(box, 'Visage inscrit (' + s.data.captured + ' images). L\'exigence faciale est activée pour ce compte.');
+        if (s.data.state === 'done') facesTab(box, 'Visage inscrit (' + s.data.captured + ' images). Ce compte peut maintenant se connecter (visage puis mot de passe).');
         else { msg.className = 'status ko'; msg.textContent = 'Inscription échouée : ' + (why[s.data.reason] || s.data.reason); }
       }, 700);
     } }, 'Inscrire un visage');

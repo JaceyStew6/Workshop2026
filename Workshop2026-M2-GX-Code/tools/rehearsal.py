@@ -54,8 +54,8 @@ def main():
     ap.add_argument("--duration", type=int, default=120)
     ap.add_argument("--spoof-ip", help="identité simulée de l'attaquant (un seul poste)")
     ap.add_argument("--no-attack", action="store_true", help="ne pas lancer l'attaque (lancée depuis le PC Attaquant)")
-    ap.add_argument("--password-file", default=str(ROOT / ".secrets" / "demo_password"))
-    ap.add_argument("--user", default="demo-user")
+    ap.add_argument("--password-file", default=str(ROOT / ".secrets" / "bot_password"))
+    ap.add_argument("--user", default="demo-bot")
     ap.add_argument("--out", required=True, help="dossier de sortie")
     a = ap.parse_args()
 
@@ -87,7 +87,7 @@ def main():
         t = time.time()
         sq, mq, _ = call(a.base, "GET", "/api/fees/quote?amount=50")
         sp, mp, body = call(a.base, "POST", "/api/payments",
-                            {"from": "ACC-DEMO-1", "to": "ACC-DEMO-2", "amount": "5.00", "idempotency_key": f"reh-{t}"}, auth)
+                            {"from": "ACC-BOT-1", "to": "ACC-BOT-2", "amount": "5.00", "idempotency_key": f"reh-{t}"}, auth)
         samples.append({"t": round(t - t_attack, 1), "devis": sq, "devis_ms": mq, "virement": sp, "virement_ms": mp})
         time.sleep(max(0.0, 1.0 - (time.time() - t)))
     if attack:

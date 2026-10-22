@@ -28,6 +28,13 @@ import numpy as np
 log = logging.getLogger("gate")
 
 PATTERNS = ("off", "green_blink", "green_solid", "red_blink", "red_solid")
+# Comptes machine : seuls à se connecter sans visage. Tout autre compte (humain) doit passer par la caméra.
+MACHINE_ROLES = {"probe", "automation"}
+
+
+def needs_face(info: dict) -> bool:
+    """Visage exigé pour les utilisateurs du portail ; pas pour les comptes machine ni pour les rôles d'administration."""
+    return info["role"] not in MACHINE_ROLES and "backoffice:access" not in info.get("perms", [])
 
 
 @dataclass
@@ -276,8 +283,8 @@ class FaceGate:
             self._event("identify", "blocked")
             raise GateError(429, "blocked", "Trop d'échecs : identification bloquée pour cet identifiant.", blocked_s=left)
         info = self.store.user_info(username)
-        if info and info["active"] and not info["face_required"]:
-            return {"face_required": False}
+        if info and info["active"] and not needs_face(info):
+            return {"face_required": False}      # compte machine ou d'administration : mot de passe seul
         if not self.ip_rate.allow(ip):
             self._event("identify", "ip_limited")
             raise GateError(429, "ip_limited", "Trop de tentatives depuis ce poste, patientez quelques minutes.")
@@ -455,8 +462,6 @@ class FaceGate:
                 job.state, job.reason = "failed", "inconsistent"     # plusieurs personnes / mouvement : on refuse
                 return
             job.template_id = self.store.add_template(job.username, job.label, mean.astype(np.float32), len(vectors), job.actor)
-            if self.store.count_templates(job.username) == 1:
-                self.store.set_face_required(job.username, True)      # 1re inscription : le visage devient exigé
             self.store.audit(job.actor, "face.enroll", job.username, {"template": job.template_id, "samples": len(vectors)}, ip)
             self._event("enroll", "ok")
             job.state = "done"
@@ -482,9 +487,9 @@ class FaceGate:
             raise GateError(404, "unknown_template", "Empreinte introuvable.")
         username = rows[0]["username"]
         info = self.store.user_info(username)
-        if info and info["face_required"] and self.store.count_templates(username) <= 1:
-            raise GateError(409, "last_template", "Dernière empreinte d'un compte qui exige le visage : désactivez d'abord "
-                                                  "l'exigence faciale de ce compte (Utilisateurs).")
+        if info and needs_face(info) and self.store.count_templates(username) <= 1:
+            raise GateError(409, "last_template", "Dernière empreinte de ce compte : le supprimer l'empêcherait de se connecter. "
+                                                  "Inscrivez d'abord la nouvelle empreinte, puis supprimez l'ancienne.")
         self.store.delete_template(template_id)
         self.store.audit(actor, "face.delete", username, {"template": template_id}, ip)
         return {"deleted": template_id}

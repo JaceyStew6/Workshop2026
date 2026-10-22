@@ -6,7 +6,7 @@ RUN="${RUN:-/tmp/ra-run}"
 HERE="$(cd "$(dirname "$0")/../.." && pwd)"
 mkdir -p "$RUN/.secrets"; chmod 755 "$RUN" "$RUN/.secrets"   # banc d essai jetable uniquement
 gen() { [ -f "$RUN/.secrets/$1" ] || python3 -c "import secrets;print(secrets.token_urlsafe(24))" > "$RUN/.secrets/$1"; }
-for s in db_password jwt_secret remediation_token waf_admin_token probe_password demo_password; do gen "$s"; done
+for s in db_password jwt_secret remediation_token waf_admin_token probe_password demo_password bot_password; do gen "$s"; done
 chmod 644 "$RUN/.secrets/"*      # postgres (autre UID) doit pouvoir lire le secret pour 20-roles.sh
 
 PW="$(cat "$RUN/.secrets/db_password")"

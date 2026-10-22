@@ -49,6 +49,7 @@ secrets:
   face_agent_token:   { file: ./.secrets/face_agent_token }     # face-gate <-> agent caméra du PC Hôte
   device_token:       { file: ./.secrets/device_token }         # ESP8266 (voyant)
   admin_password:     { file: ./.secrets/admin_password }
+  bot_password:       { file: ./.secrets/bot_password }
   operator_password:  { file: ./.secrets/operator_password }
 
 services:
@@ -105,7 +106,7 @@ services:
       args:
         PIP_EXTRA_ARGS: ${PIP_EXTRA_ARGS:-}
     networks: [app]
-    secrets: [db_password, jwt_secret, demo_password, probe_password, face_ticket_secret, admin_password, operator_password]
+    secrets: [db_password, jwt_secret, demo_password, probe_password, face_ticket_secret, admin_password, operator_password, bot_password]
     environment:
       DB_HOST: postgres
       DB_NAME: payments
@@ -117,6 +118,7 @@ services:
       FACE_TICKET_SECRET_FILE: /run/secrets/face_ticket_secret
       ADMIN_PASSWORD_FILE: /run/secrets/admin_password
       OPERATOR_PASSWORD_FILE: /run/secrets/operator_password
+      BOT_PASSWORD_FILE: /run/secrets/bot_password
     read_only: true
     tmpfs: [/tmp]
     depends_on:

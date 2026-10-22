@@ -146,7 +146,7 @@ def main():
         "NIS2 et DORA : cartographie couvert / partiel / écart, sans prétention de conformité. EBIOS : 15 risques, dont la biométrie."])
 
     # Diapo 10 : ce qui reste à prouver (le point 2, en rouge, reste le risque principal)
-    items = [("Text 4", "Text 5", "Caméra réelle et ESP8266 physique", "Faux rejets/accepts sur vrais visages ; flasher le firmware (CLion)"),
+    items = [("Text 4", "Text 5", "ESP8266 physique et taux d'erreur du visage", "Flasher le firmware (CLion) ; mesurer faux rejets/accepts sur plusieurs personnes"),
              ("Text 8", "Text 9", "Attaque depuis un second PC", "Lire l'IP source vue par le WAF, TRUSTED_PROXIES vide"),
              ("Text 12", "Text 13", "Détecteur sur le dispositif final", "Réentraîner (≥ 2 h), puis répéter 3 fois depuis le PC Attaquant"),
              ("Text 16", "Text 17", "Vidéo de 60 s ; RAG avec Ollama réel", "Filmer depuis le PC Attaquant ; installer Ollama et calibrer"),
@@ -165,22 +165,23 @@ def main():
     set_paragraphs(shape(s, "Titre"), ["Back-office biométrique"])
     set_paragraphs(shape(s, "Message"), ["Visage, mot de passe, voyant : un second facteur contrôlé côté serveur."])
     cards = [("Text 4", "Text 5", "Trois étapes",
-              "Identifiant, visage (caméra du PC Hôte), mot de passe ; ticket facial signé à usage unique."),
+              "Portail de paiement : identifiant, visage (caméra du PC Hôte), mot de passe. Administration : identifiant et mot de passe."),
              ("Text 8", "Text 9", "Voyant ESP8266",
               "Éteint par défaut ; vert clignotant puis fixe 30 s ; rouge fixe 30 s ou clignotant 10 fois ; blocage 5 min."),
              ("Text 12", "Text 13", "Habilitations",
               "Rôles et permissions portés par le jeton, pas d'escalade, audit de chaque action."),
              ("Text 16", "Text 17", "Prouvé / non prouvé",
-              "Bout en bout vérifié (caméra simulée), firmware compilé. Non vérifié : vraie caméra, ESP physique ; pas de vivacité.")]
+              "Essayé avec une vraie caméra USB, bout en bout vérifié, firmware compilé. Non vérifié : ESP physique, taux d'erreur ; pas de vivacité.")]
     for t, b, title, body in cards:
         set_paragraphs(shape(s, t), [title])
         set_paragraphs(shape(s, b), [body])
     set_notes(s,
         "Consigne additionnelle 1. Docker ne transmet pas une caméra USB à un conteneur Linux : la caméra et la reconnaissance faciale "
-        "(OpenCV, YuNet + SFace) tournent donc sur le PC Hôte, et le service face-gate décide. Un mot de passe volé ne suffit pas : "
-        "auth-service exige un ticket facial signé, à usage unique, que le navigateur ne voit jamais. Test de bout en bout avec les vrais délais "
-        "(rouge fixe 30 s, rouge clignotant 10 s, vert fixe 30,3 s mesurés, blocage 5 min). Dire clairement : caméra simulée pour ce test, "
-        "ESP8266 jamais flashé (firmware compilé, logique testée sur PC), aucune détection de vivacité : une photo peut tromper le modèle.")
+        "(OpenCV, YuNet + SFace) tournent donc sur le PC Hôte, et le service face-gate décide. Le visage est obligatoire pour les utilisateurs du portail de paiement ; l'administration (mot de passe seul, choix assumé, risque à signaler) et les comptes machine s'en dispensent. "
+        "Un mot de passe volé ne suffit pas : auth-service exige un ticket facial signé, à usage unique, que le navigateur ne voit jamais. Test de bout en bout avec les vrais délais "
+        "(rouge fixe 30 s, rouge clignotant 10 s, vert fixe 30,3 s mesurés, blocage 5 min). Ces délais ont été mesurés avec une caméra simulée ; "
+        "l'inscription du visage et la connexion ont ensuite été essayées avec une vraie caméra USB et fonctionnent. Dire clairement : ESP8266 jamais flashé "
+        "(firmware compilé, logique testée sur PC), taux de faux rejets et faux accepts non mesurés, aucune détection de vivacité : une photo peut tromper le modèle.")
     lst = prs.slides._sldIdLst
     last = list(lst)[-1]
     lst.remove(last)

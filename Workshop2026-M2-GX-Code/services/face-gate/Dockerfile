@@ -5,7 +5,7 @@ COPY requirements.txt .
 # Réseau qui intercepte TLS (proxy, antivirus) : PIP_EXTRA_ARGS dans .env, voir README. Vide par défaut.
 ARG PIP_EXTRA_ARGS=""
 RUN pip install --no-cache-dir ${PIP_EXTRA_ARGS} -r requirements.txt
-COPY app.py api.py gate.py store.py clients.py ./
+COPY app.py api.py gate.py store.py clients.py enroll_cli.py ./
 RUN useradd -r -u 10001 svc
 USER 10001
 EXPOSE 8000

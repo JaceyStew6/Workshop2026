@@ -1,5 +1,5 @@
 /* Connexion en trois étapes : identifiant -> reconnaissance faciale (caméra du PC Hôte) -> mot de passe.
-   Les comptes sans exigence faciale (ex. demo-user) passent directement de l'identifiant au mot de passe.
+   Les comptes d'administration et les comptes machine passent directement de l'identifiant au mot de passe.
    Toute la décision est prise côté serveur (face-gate / auth-service) ; ce composant ne fait qu'afficher l'état. */
 (function () {
   const { h, api, ledWidget, detail } = window.RA;

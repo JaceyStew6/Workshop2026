@@ -84,8 +84,10 @@ class FakeAuth:
 @pytest.fixture()
 def env():
     clock, agent, auth, store = Clock(), FakeAgent(), FakeAuth(), MemoryStore()
-    store.add_user("alice", "admin")
-    store.add_user("demo-user", "user", face_required=False)
+    store.add_user("alice", "user")                                         # utilisateur du portail : visage obligatoire
+    store.add_user("root", "admin")                                         # administration : mot de passe seul
+    store.add_user("demo-bot", "automation", face_required=False)          # compte machine : le seul genre de compte sans visage
+    store.add_user("bob-humain", "user", face_required=False)              # humain : le visage reste obligatoire quel que soit ce drapeau
     store.add_template("alice", "test", np.asarray(person("alice"), dtype=np.float32), 8, "test")
     gate = FaceGate(store, agent, auth, TICKET_SECRET, Config(), clock, spawn=lambda fn: fn())   # synchrone
     return gate, agent, auth, store, clock
@@ -210,7 +212,7 @@ def test_success_resets_failure_counter(env):
 # ---------------------------------------------------------------- sécurité
 def test_unknown_and_inactive_users_go_through_the_same_scan_and_fail(env):
     gate, agent, auth, store, clock = env
-    store.add_user("ghost-inactive", "admin", active=False)
+    store.add_user("ghost-inactive", "user", active=False)
     agent.who = "alice"
     for u in ("inconnu", "ghost-inactive"):
         r = gate.identify(u, "10.0.0.9")
@@ -218,10 +220,25 @@ def test_unknown_and_inactive_users_go_through_the_same_scan_and_fail(env):
         clock.advance(31); gate.tick()
 
 
-def test_face_exempt_account_skips_camera_entirely(env):
-    gate, agent, *_ = env
-    assert gate.identify("demo-user", "10.0.0.5") == {"face_required": False}
+def test_machine_and_administration_accounts_skip_the_camera(env):
+    gate, agent, auth, store, clock = env
+    store.add_user("staff", "operator")
+    for u in ("demo-bot", "root", "staff"):
+        assert gate.identify(u, "10.0.0.5") == {"face_required": False}
     assert not agent.on and agent.calls == []
+    store.users["bob-humain"]["perms"] = ["backoffice:access"]                  # un rôle d'administration personnalisé en est dispensé aussi
+    assert gate.identify("bob-humain", "10.0.0.5") == {"face_required": False}
+
+
+def test_portal_user_always_goes_through_the_camera_even_without_enrolled_face(env):
+    gate, agent, auth, store, clock = env
+    agent.who = "bob-humain"
+    r = gate.identify("bob-humain", "10.0.0.5")
+    assert r["face_required"] is True                                          # jamais d'accès par mot de passe seul
+    assert gate.status(r["session_id"])["state"] == "denied"                   # aucun visage inscrit : refusé, comme un inconnu
+    with pytest.raises(GateError):
+        gate.password(r["session_id"], "bon-mot-de-passe", "10.0.0.5")
+    assert auth.calls == []
 
 
 def test_agent_down_fails_closed_without_counting_a_user_failure(env):
@@ -319,24 +336,24 @@ def test_cancel_turns_camera_and_led_off(env):
 
 
 # ---------------------------------------------------------------- inscription
-def test_enrol_encrypts_template_enables_requirement_and_refuses_inconsistent_samples(env):
+def test_enrol_encrypts_template_and_refuses_inconsistent_samples(env):
     gate, agent, auth, store, clock = env
-    store.add_user("bob", "operator", face_required=False)
+    store.add_user("bob", "user", face_required=False)
     agent.who = "bob"
     job = gate.start_enroll("bob", "face", "alice", "10.0.0.5")
     assert gate.enroll_status(job["job_id"])["state"] == "done"
-    assert store.user_info("bob")["face_required"] is True and not agent.on
+    assert store.count_templates("bob") == 1 and not agent.on
     raw = next(iter(t for t in store._tpl.values() if t["username"] == "bob"))
     assert len(raw["ct"]) > 128 * 4                                        # chiffré (+ étiquette GCM), pas le vecteur brut
     with pytest.raises(Exception):
         unseal(store.key, "alice", raw["nonce"], raw["ct"])                # liée à l'utilisateur (AAD)
     # échantillons incohérents (plusieurs personnes alternent)
-    store.add_user("carl", "operator", face_required=False)
+    store.add_user("carl", "user", face_required=False)
     seq = iter(range(100))
     agent.embed = lambda frames, timeout_s: {"embeddings": [person("a" if next(seq) % 2 else "b") for _ in range(frames)], "reason": "ok"}
     job = gate.start_enroll("carl", "face", "alice", "10.0.0.5")
     assert gate.enroll_status(job["job_id"])["state"] == "failed"
-    assert store.count_templates("carl") == 0 and store.user_info("carl")["face_required"] is False
+    assert store.count_templates("carl") == 0
 
 
 def test_enrol_refused_while_a_login_session_uses_the_camera(env):
@@ -348,7 +365,7 @@ def test_enrol_refused_while_a_login_session_uses_the_camera(env):
     assert e.value.status == 423
 
 
-def test_cannot_delete_last_template_of_a_face_required_account(env):
+def test_cannot_delete_last_template_of_a_human_account(env):
     gate, agent, auth, store, clock = env
     tid = store.list_templates("alice")[0]["id"]
     with pytest.raises(GateError) as e:

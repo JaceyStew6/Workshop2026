@@ -31,7 +31,7 @@ Ces cibles sont des **choix d'équipe** à valider ; elles ne dérivent d'aucune
 | S4 Base corrompue ou invariant violé | Sonde (`ledger/integrity`) | `ansible-playbook ansible/restore.yml` après arrêt des écritures | Non (décision humaine) |
 | S5 Perte de l'hôte | Humain | Reconstruire l'hôte, `ansible/deploy.yml`, restaurer la dernière sauvegarde | Non |
 | S6 Perte de la clé age (secrets) | Humain | Régénérer tous les secrets (`FORCE=1 sh tools/init_secrets.sh`), supprimer les volumes (`docker compose down -v`, les mots de passe changent), redéployer ; les sessions JWT en cours sont invalidées | Non |
-| S7 Caméra ou agent hôte indisponible | Message « service de reconnaissance indisponible » à la connexion au back-office | Relancer `host-agent/run-agent.ps1` ; secours : désactiver l'exigence faciale du compte depuis l'hôte (`docs/runbooks.md#biometrie`). Le service de paiement continue | Non (échec fermé voulu) |
+| S7 Caméra ou agent hôte indisponible | Message « service de reconnaissance indisponible » à la connexion au portail | Relancer `host-agent/run-agent.ps1` ou brancher une autre webcam ; récupération : `enroll_cli.py` depuis l'hôte. **Aucun utilisateur du portail ne peut se connecter pendant ce temps** ; back-office, sonde, scripts et jetons déjà émis (15 min) continuent | Non (échec fermé voulu) |
 
 ### Ordre de reconstruction (S5)
 1. Installer Docker Desktop et préparer WSL (Ubuntu, `age`, `sops`, `ansible`, intégration Docker, utilisateur dédié, option de montage `metadata` : procédure exacte dans le README, « Déploiement officiel sous WSL »).
